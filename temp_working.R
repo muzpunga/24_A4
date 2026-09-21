@@ -1,6 +1,7 @@
 library(DESeq2)
 library(ggplot2)
 
+# Read six count files into one count matrix
 condition_a_files <- c("sample_024_counts.txt", "sample_026_counts.txt", "sample_029_counts.txt")
 condition_b_files <- c("sample_007_counts.txt", "sample_017_counts.txt", "sample_032_counts.txt")
 
@@ -16,12 +17,13 @@ all_files <- c(condition_a_files, condition_b_files)
 available_files <- intersect(all_files, dir(counts_dir))
 available_files
 
+# Build sample metadata
 sample_metadata <- data.frame(
   sample_id = available_files,
   condition = ifelse(available_files %in% condition_a_files, "A", "B"),
   stringsAsFactors = FALSE)
 
-# Set condition A as reference level
+# Build sample metadata with A as reference level
 sample_metadata$condition <- factor(
   sample_metadata$condition,
   levels = c("A", "B"))
@@ -39,6 +41,7 @@ count_list <- lapply(available_files, function(f) {
   }
 )
 
+# Read six count files into one count matrix
 count_matrix <- data.frame(
   gene_id = count_list[[1]][, 1]
 )
@@ -68,15 +71,16 @@ for (i in 1:ncol(count_matrix)) {
 # must sum to 1 million
 # colSums(cpm)
 
+# Filter unexpressed genes 1.
 keep <- rowSums(cpm > 1) >= 3
 table(keep)
-
+# Filter unexpressed genes 2.
 counts_filtered <- count_matrix[keep, ] 
 cpm_filtered <- cpm[keep, ]
 dim(count_matrix)
 dim(counts_filtered)
 
-# Log-CPM transformation
+# Compute log-CPM 1. +1 is standard approach to handling zeros
 log_cpm <- log2(cpm_filtered + 1)
 dim(log_cpm)
 head(log_cpm)
@@ -95,21 +99,19 @@ boxplot(
 
 
 
-### PCA 
-
+# PCA 1. checks
 dim(log_cpm)
-# transposition is required - after transposition, the row count should be small and colum count very high
+# transposition is required - after transposition the row count should be small and colum count high
 dim(t(log_cpm))
-
+# PCA 2. perform PCA
 pca <- prcomp(t(log_cpm))
 dim(pca$x)
 head(rownames(pca$x))
 
 
-# how much variation each component captures
+# Report % variance explained by PC1
 percent_var <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
-percent_var[1:4]
-
+percent_var[1:4] # percent_var[1] is the variance explained by PC1
 
 pca_df <- data.frame(
   sample_id = rownames(pca$x),
@@ -130,22 +132,19 @@ p_pca <- ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
   ) + theme_bw() +
   geom_text(aes(label = sample_id), vjust = -1.2, size = 3, show.legend = FALSE)
 
-
-
-# 3. 
-
+# Build DESeqDataSet with ~ condition 1. checks
 all(colnames(counts_filtered) == sample_metadata$sample_id) #stopifnot()
-
+# Build DESeqDataSet with ~ condition 2. create SESeqDataSet
 dds <- DESeqDataSetFromMatrix(
   countData = counts_filtered,
   colData = sample_metadata,
   design = ~ condition)
-
+# Build DESeqDataSet with ~ condition 3. convert to dds and check its object type
 dds <- DESeq(dds)
 class(dds)
 
 levels(dds$condition)
-resultsNames(dds)
+resultsNames(dds) # needed for Shrink fold below
 
 
 # extract the results for the contrast of condition B versus condition A
@@ -172,8 +171,7 @@ plotDispEsts(dds_disp)
 # The dispersion plot showed the expected inverse relationship between mean normalized counts and dispersion. Gene-wise dispersion estimates (black points) followed the fitted dispersion trend (red curve), while empirical Bayes shrinkage produced final dispersion estimates (blue points) that were stabilized towards the fitted trend. Overall, the dispersion model appeared well-behaved with no evidence of major fitting problems.
 
 
-# 4. Shrink the fold changes using the coefficient name that resultsNames() reports.
-
+# Shrink fold changes using coefficient from resultsNames()
 library(apeglm)
 res_shrunk <- lfcShrink(
   dds,
