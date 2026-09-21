@@ -1,6 +1,11 @@
+library(clusterProfiler)
 library(DESeq2)
 library(ggplot2)
+library(magrittr)
 library(apeglm)
+library(pheatmap)
+library(org.Sc.sgd.db)
+library(AnnotationDbi)
 
 # ============================================================================
 # Create figures directory if it does not already exist
@@ -444,11 +449,93 @@ p_volcano
 
 # Save volcano plot
 
-ggsave(
-  filename = "figures/volcano_plot.png",
-  plot = p_volcano,
-  width = 7,
+ggsave(filename = "figures/volcano_plot.png", plot = p_volcano, units = "in", dpi = 600)
+
+
+res_df$gene_id <- rownames(res_df)
+sig_ids <- res_df$gene_id[res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1]
+sig_ids <- sig_ids[!is.na(sig_ids)]
+length(sig_ids)
+
+heat_matrix <- log_cpm[rownames(log_cpm) %in% sig_ids, ]
+dim(heat_matrix)
+
+annotation_col <- data.frame(Stage = sample_metadata$condition)
+rownames(annotation_col) <- sample_metadata$sample_id
+annotation_col
+
+
+pheatmap(
+  heat_matrix,
+  scale = "row",
+  show_rownames = FALSE,
+  annotation_col = annotation_col,
+  main = "Differentially expressed genes: B vs A",
+  filename = "figures/heatmap.png"
+)
+
+
+
+res_df$gene_name <- mapIds(
+  org.Sc.sgd.db,
+  keys = res_df$gene_id,
+  column = "COMMON",
+  keytype = "ORF",
+  multiVals = "first")
+
+# A warning about one-to-many mappings is expected.
+# Some ORF identifiers map to multiple annotation records.
+# Because multiVals = "first" was specified, only the first
+# matching gene name is returned.
+
+# Some genes return NA because no common gene name is available.
+# This is common for poorly characterised ORFs and does not
+# indicate an error in the annotation process.
+
+# add description. Be mindful that the descriptions are lengthy
+res_df$description <- mapIds(
+  org.Sc.sgd.db,
+  keys = res_df$gene_id,
+  column = "DESCRIPTION",
+  keytype = "ORF",
+  multiVals = "first")
+
+
+gene_universe <- res_df$gene_id[!is.na(res_df$padj)]
+length(gene_universe)
+
+length(sig_ids)
+
+# run a Gene Ontology over-representation analysis on the biological process ontology
+ego <- enrichGO(
+  gene = sig_ids,
+  universe = gene_universe,
+  OrgDb = org.Sc.sgd.db,
+  keyType = "ORF",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05)
+# low proportion failed to map - this is a good result
+
+
+ego_df <- as.data.frame(ego)
+
+head(ego_df[, c(
+    "Description",
+    "GeneRatio",
+    "BgRatio",
+    "p.adjust")])
+
+png(
+  filename = "figures/go_bp_dotplot.png",
+  width = 8,
   height = 6,
   units = "in",
-  dpi = 600
-)
+  res = 600)
+
+dotplot(
+  ego,
+  showCategory = 15) +
+  ggtitle("Enriched biological processes: B versus A")
+
+dev.off()
