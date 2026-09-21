@@ -1,0 +1,85 @@
+---
+title: "SLE777 Assessment 4: Reproducible Differential Expression Report"
+author: "REPLACE WITH BOTH PARTNERS' NAMES"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+params:
+  group_id: "REPLACE_WITH_YOUR_GROUP_NUMBER"
+  # Paste your six assigned count files exactly as they appear in your allocation row.
+  condition_a_files: ["sample_XXX_counts.txt", "sample_XXX_counts.txt", "sample_XXX_counts.txt"]
+  condition_b_files: ["sample_XXX_counts.txt", "sample_XXX_counts.txt", "sample_XXX_counts.txt"]
+  counts_dir: "/home/shared/SLE777/A4_counts"
+  gene_of_interest: "YXXXXXX"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 7, fig.height = 6)
+set.seed(777)
+# Load the packages you need. Record versions with sessionInfo() at the end.
+```
+
+This report analyses the cohort assigned to group ``r params$group_id``,
+gene of interest ``r params$gene_of_interest``.
+
+# 1. Count matrix and metadata
+
+```{r matrix}
+
+```
+
+# 2. Normalisation and PCA
+
+```{r pca}
+
+```
+
+# 3. Differential expression
+
+```{r deseq2}
+
+```
+
+# 4. Significant genes
+
+```{r significant}
+
+```
+
+# 5. Volcano plot and heatmap
+
+```{r figures}
+
+```
+
+# 6. Annotation and GO enrichment
+
+```{r enrichment}
+
+```
+
+# 7. Your gene of interest
+
+```{r goi}
+
+```
+
+# 8. Interpretation
+
+**Gene of interest (max 4 sentences):**
+
+**PCA (max 3 sentences):**
+
+**Enrichment (max 4 sentences):**
+
+**Volcano caption (2 sentences):**
+
+# 9. Session information
+
+```{r session}
+sessionInfo()
+```
