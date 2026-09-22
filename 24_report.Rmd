@@ -9,11 +9,11 @@ output:
     code_folding: show
 params: 
   group_id: "24"
-  # Paste your six assigned count files exactly as they appear in your allocation row.
-  condition_a_files: ["sample_080_counts.txt","sample_088_counts.txt","sample_096_counts.txt"]
-  condition_b_files: ["sample_005_counts.txt","sample_036_counts.txt","sample_045_counts.txt"]
+  # Six assigned count files exactly as they appear in our allocation row
+  condition_a_files: ["sample_024_counts.txt","sample_026_counts.txt","sample_029_counts.txt"]
+  condition_b_files: ["sample_007_counts.txt","sample_017_counts.txt","sample_032_counts.txt"]
   counts_dir: "/home/shared/SLE777/A4_counts"
-  gene_of_interest: "YBR126C"
+  gene_of_interest: "YDL022W"
 ---
 
 ```{r setup, include=FALSE}
@@ -24,11 +24,16 @@ set.seed(777)
 library(clusterProfiler)
 library(DESeq2)
 library(ggplot2)
+# What's magrittr used for?
 library(magrittr)
 library(apeglm)
 library(pheatmap)
 library(org.Sc.sgd.db)
 library(AnnotationDbi)
+
+# Suggested library green lit by unit chair for dynamic labelling
+# OPTIONAL
+library(ggrepel)
 
 # Create figures directory if it does not already exist
 dir.create("figures", showWarnings = FALSE)
@@ -40,50 +45,255 @@ gene of interest ``r params$gene_of_interest``.
 # 1. Count matrix and metadata
 
 ```{r matrix}
-# Read six count files into one count matrix
-condition_a_files <- c("sample_024_counts.txt", "sample_026_counts.txt", "sample_029_counts.txt")
-condition_b_files <- c("sample_007_counts.txt", "sample_017_counts.txt", "sample_032_counts.txt")
+####################################
+# Build the count matrix
+####################################
 
-counts_dir <- "../../shared/SLE777/A4_counts"
+# Combine six HTSeq-count files into one gene six sample matrix
+# Samples: condition A versus condition B, for assessment purposes
 
-condition_a_files %in% dir(counts_dir)
-condition_b_files %in% dir(counts_dir)
+# To compare gene expression between conditions, we need all six samples side by side in one table
+# The end product of this is a count matrix
+# One row per gene and one column per sample and a read count in every cell
+# We also build a sample metadata table
+# These two objects are required for differential expression analysis (DESeq2)
 
-all_files <- c(condition_a_files, condition_b_files)
-available_files <- intersect(all_files, dir(counts_dir))
+### Descriptions of samples
+# Counts provided for assessment purposes
+# No additional information provided
 
-# Build sample metadata
+####################################
+# The sample metadata table
+####################################
+
+# Create sample metadata table with sample identifiers and condition
 sample_metadata <- data.frame(
-  sample_id = available_files,
-  condition = ifelse(available_files %in% condition_a_files,"A","B"),stringsAsFactors = FALSE)
-# Set condition A as reference level
+  sample_id = c("sample_024", "sample_026", "sample_029",
+                "sample_007", "sample_017", "sample_032"),
+  condition = c("A", "A", "A",
+                "B", "B", "B")
+)
+sample_metadata
+
+### Conditions should be factors
+# Statistical models in R need categorical variables stored as factors
+# At the moment condition is a character column
+class(sample_metadata$condition)
+str(sample_metadata)
+
+# We want condition a to be the reference
+# ...so that later a positive fold change will mean "higher in b than a"
+
+# Convert the condition column to a factor with a as the reference level
 sample_metadata$condition <- factor(
   sample_metadata$condition,
-  levels = c("A", "B"))
+  levels = c("A", "B")
+)
+# Check that the conversion worked
+levels(sample_metadata$condition)
+# Check the structure of the metadata table
+str(sample_metadata)
 
+### Row names
+
+# Name rows of the metadata after the samples
 rownames(sample_metadata) <- sample_metadata$sample_id
 
-# Read count files and place in a list (which will be converted to the count matrix)
-count_list <- lapply(
-  available_files,
-  function(f) {
-    read.table(
-      file.path(counts_dir, f),
-      header = TRUE,
-      sep = "\t",
-      stringsAsFactors = FALSE)})
+# Confirm the metadata table is correct after these changes
+sample_metadata
 
-# Build count matrix
-count_matrix <- data.frame(gene_id = count_list[[1]][, 1])
+### Finding the count files
 
-for (i in seq_along(count_list)) {
-  count_matrix[[available_files[i]]] <- count_list[[i]][, 2]
+# Locate the count files assigned for the assessment
+# We need to be specific here as there are many files
+# Could also replace with params above to be safe
+condition_A_files <- c(
+  "sample_024_counts.txt",
+  "sample_026_counts.txt",
+  "sample_029_counts.txt"
+)
+
+condition_B_files <- c(
+  "sample_007_counts.txt",
+  "sample_017_counts.txt",
+  "sample_032_counts.txt"
+)
+
+# Define the file path for our files
+# This is the only time we are using an absolute path
+# This was called for in the assessment instructions
+counts_dir <- "/home/shared/SLE777/A4_counts"
+
+# Create vectors to save the files and their paths
+count_files <- c(condition_A_files, condition_B_files)
+count_paths <- file.path(counts_dir, count_files)
+
+# Confirm that you can see the full file paths and file names
+count_paths
+
+# Safety checks to stop if not all six samples
+stopifnot(length(count_files) == 6)
+stopifnot(all(file.exists(count_paths)))
+
+### Deriving sample names from file names
+
+# Check file names again for what to strip
+count_files
+
+# Strip until we have sample identifiers only
+sample_ids <- gsub("_counts\\.txt$", "", count_files)
+sample_ids
+
+# Check that every sample id derived from file name also appears in metadata table
+# Stop the script if all results do not evaluate as TRUE
+stopifnot(all(sample_ids %in% sample_metadata$sample_id))
+
+####################################
+# Merging the count files into one table
+####################################
+
+# Each count file is a two-column table: 
+# ...a gene identifier, and the count for that one sample 
+# To put six samples side by side
+# ...we need to join these tables so that each row still refers to the same gene 
+
+### Reading all six files with a loop
+# The if else was added to the loop to create the counts_table object from scratch
+# This deviates from the practical code as that included demonstration code
+for (i in 1:length(count_paths)) {
+  
+  one_sample <- read.table(
+    count_paths[i],
+    header = FALSE,
+    col.names = c("gene_id", sample_ids[i])
+  )
+  
+  # Quick checks to reflect structure set earlier in code
+  # Stop if the count table being processed does not have two columns
+  # or if the first column is not character
+  # or if the second column is not numeric
+  stopifnot(
+    ncol(one_sample) == 2,
+    is.character(one_sample$gene_id),
+    is.numeric(one_sample[[2]])
+  )
+
+  # Merge the new sample into the growing counts table
+  # The first time through the loop the counts_table does not yet exist
+  if (i == 1) {
+    counts_table <- one_sample
+  } else {
+    counts_table <- merge(counts_table, one_sample, by = "gene_id")
+  }
 }
 
-rownames(count_matrix) <- count_matrix$gene_id
-count_matrix$gene_id <- NULL
+### Quick checks and guardrails for counts_table creation
 
-count_matrix <- as.matrix(count_matrix)
+# Confirm merged table contains one gene_id column plus six sample columns
+stopifnot(ncol(counts_table) == length(sample_ids) + 1)
+
+# Column names should be gene ID plus our sample IDs
+expected_colnames <- c("gene_id", sample_ids)
+stopifnot(all(colnames(counts_table) == expected_colnames))
+
+# Check that the final table to see how many gene IDs and samples you have
+# Remember that these are still inclusive of summary rows
+message(
+  "Merged count table created successfully: ",
+  nrow(counts_table), " rows x ",
+  ncol(counts_table), " columns."
+)
+
+####################################
+# Separating the HTSeq-count summary rows
+####################################
+
+# Every count file has summary rows
+# These were merged along with gene counts and will need to be separated
+
+# Apply grepl to the wider table
+is_summary <- grepl("^__", counts_table$gene_id)
+sum(is_summary)
+
+# Split table in two
+htseq_summary <- counts_table[is_summary, ]
+gene_table <- counts_table[!is_summary, ]
+
+# Check that the split worked
+dim(counts_table)
+
+# Check that summary rows are in the summary table
+dim(htseq_summary)
+
+# Check that the gene table has no summary rows
+dim(gene_table)
+
+### Guardrails to be confident we have removed them
+
+# Check that the summary table has five rows, one for each of the five HTSeq-count summary categories
+stopifnot(nrow(htseq_summary) == 5)
+
+# Check that the gene table has no summary rows
+stopifnot(!any(grepl("^__", gene_table$gene_id)))
+
+# And lastly, check that the gene table has the same number of rows as the original count files
+# ...because we have not lost any genes in the merge
+# The number of rows in the gene table should match the number of rows in any one of the original count files, minus the five summary rows
+stopifnot(nrow(gene_table) == nrow(one_sample) - 5)
+
+### These rows tell you how many reads were discarded because they fell outside any gene
+# ...because they were ambiguous between overlapping genes
+# or because their alignment quality was too low
+# A sample with an unusually high __no_feature count deserves a closer look
+htseq_summary
+
+####################################
+# Building the count matrix
+####################################
+
+# Need to remove gene_id so there is no text in table
+# This is so that we can convert the table to a numeric matrix
+count_matrix <- as.matrix(gene_table[, -1])
+rownames(count_matrix) <- gene_table$gene_id
+
+# Manually check the new object has the same dimensions minus one column
+# Inspect visually the structure and first few rows
+dim(count_matrix)
+str(count_matrix)
+head(count_matrix)
+
+# And guardrailds for safety
+stopifnot(
+  nrow(count_matrix) == nrow(gene_table),
+  ncol(count_matrix) == ncol(gene_table) - 1,
+  all(rownames(count_matrix) == gene_table$gene_id),
+  all(colnames(count_matrix) == sample_ids),
+  is.matrix(count_matrix),
+  is.numeric(count_matrix)
+)
+
+####################################
+# Checking that the samples line up
+####################################
+
+# The columns of the count matrix and the rows of the metadata 
+# ...must describe the same samples in the same order
+# Nothing enforces this so we watch for silent errors
+
+# First look at the two sets of names side by side
+colnames(count_matrix)
+sample_metadata$sample_id
+
+# Now force the columns into the metadata order and check
+count_matrix <- count_matrix[, sample_metadata$sample_id]
+all(colnames(count_matrix) == sample_metadata$sample_id)
+
+# Also get R to check for us
+stopifnot(all(colnames(count_matrix) == sample_metadata$sample_id))
+
+### Always reorder the matrix columns to match the metadata rows
+# ...always assert that they match
+# ...and never continue past a failed check
 ```
 
 # 2. Normalisation and PCA
