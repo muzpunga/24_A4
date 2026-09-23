@@ -122,7 +122,8 @@ condition_B_files <- c(
 # Define the file path for our files
 # This is the only time we are using an absolute path
 # This was called for in the assessment instructions
-counts_dir <- "/home/shared/SLE777/A4_counts"
+#counts_dir <- "/home/shared/SLE777/A4_counts"
+counts_dir <- "counts"
 
 # Create vectors to save the files and their paths
 count_files <- c(condition_A_files, condition_B_files)
