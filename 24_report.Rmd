@@ -287,18 +287,395 @@ sample_metadata$sample_id
 # Now force the columns into the metadata order and check
 count_matrix <- count_matrix[, sample_metadata$sample_id]
 all(colnames(count_matrix) == sample_metadata$sample_id)
+identical(colnames(count_matrix), rownames(sample_metadata))
 
 # Also get R to check for us
 stopifnot(all(colnames(count_matrix) == sample_metadata$sample_id))
+stopifnot(identical(colnames(count_matrix), rownames(sample_metadata)))
 
 ### Always reorder the matrix columns to match the metadata rows
 # ...always assert that they match
 # ...and never continue past a failed check
+
+####################################
+# Library sizes and read assignments
+####################################
+
+# The library size of a sample is the total number of reads assigned to genes
+# Samples with more reads will show higher counts for every gene
+# ...which is why we cannot compare raw counts between samples
+# Normalising converts counts into a quantity that does not depend on how deeply the sample was sequenced
+
+# Remember to use colSums
+# A lib size is a total per sample, and samples are columns in our matrix
+library_sizes <- colSums(count_matrix)
+length(library_sizes)
+library_sizes
+
+# Scale library sizes to millions of reads and round to 2 decimal places
+round(library_sizes / 1e6, 2)
+
+### Summary of reads that were not assigned to any gene
+
+# Summary rows we set aside earlier
+# Convert to matrix, removing header, then add up each column
+summary_matrix <- as.matrix(htseq_summary[, -1])
+rownames(summary_matrix) <- htseq_summary$gene_id
+summary_matrix
+
+# Sum the rows of the summary matrix to get the total number of reads that were not assigned to any gene
+unassigned <- colSums(summary_matrix)
+unassigned
+
+### Calculate the proportion of reads assigned to genes
+
+# First build a data frame
+qc_table <- data.frame(
+  sample_id = names(library_sizes),
+  library_size = as.numeric(library_sizes),
+  unassigned = as.numeric(unassigned[names(library_sizes)])
+)
+qc_table
+
+# Add two more columns using existing columns
+qc_table$total_reads <- qc_table$library_size + qc_table$unassigned
+qc_table$percent_assigned <- 100 * qc_table$library_size / qc_table$total_reads
+qc_table
+
+# A healthy RNA-seq sample from a well-annotated genome such as yeast should assign a large majority of its reads to genes
+# A sample that is markedly worse than the others is a candidate for exclusion
+# Should a least be flagged in report
+
+### Plotting the library sizes
+
+# We need to merge condition alongside the library size for coloured bars
+qc_table <- merge(qc_table, sample_metadata, by = "sample_id")
+qc_table
+
+# Fill aesthetics maps a column to bar colour
+# theme_bw() function replaces the grey default background
+# theme() call rotates the x-axis labels so that the long sample names do not overlap
+ggplot(qc_table, aes(x = sample_id, y = library_size / 1e6, fill = condition)) +
+  geom_col() +
+  labs(
+    title = "Library size per sample",
+    x = "Sample",
+    y = "Assigned reads (millions)"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+### Plot percent_assigned for each sample as a bar chart, coloured by condition, with a sensible title and axis labels
+ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
+  geom_col() +
+  labs(
+    title = "Percentage of reads assigned to genes",
+    x = "Sample",
+    y = "Reads assigned (%)"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+####################################
+# A first look across samples
+####################################
+
+# RNA-seq counts often have a skewed distribution
+# Many genes have low counts while a smaller number have very high counts
+# Log transformation makes the distributions easier to compare across samples
+
+# Draw histogram of counts across samples
+# The las = 2 argument turns the sample labels sideways so they fit
+# Logarithm cannot take zero so we add 1 across whole matrix
+boxplot(
+  log10(count_matrix + 1),
+  las = 2,
+  ylab = "log10(count + 1)",
+  main = "Distribution of gene counts per sample"
+)
+
+####################################
+# Filtering genes with no expression
+####################################
+
+# Many genes are not expressed at all in this experiment
+# They carry no information, they slow the analysis down
+# ...and they cost us statistical power when we correct for multiple testing in Week 9
+
+### Count how many genes have zero reads across every sample
+
+# Create new var for total n of rows count as total number of genes
+gene_totals <- rowSums(count_matrix)
+
+### Remove the genes with zero reads across samples
+
+# Create new variable to store filtered new matrix
+# Keep all columns
+count_matrix_filtered <- count_matrix[gene_totals > 0, ]
+
+# Calculate summary statistics of our genes across samples
+dim(count_matrix)
+
+# Summary statistics for only genes with reads
+dim(count_matrix_filtered)
+
+# Finally, check what working tables we've created thus far
+ls()
 ```
 
 # 2. Normalisation and PCA
 
+To correct for sequencing depth, we divide each count by the sample's library size, before multiplying by one million. 
+
+This is to make our counts more readable. 
+
+Scaling like this, however, does not correct for gene length. For this reason, counts per million values cannot be compared between different genes. 
+They can be compared for the When we are looking to do differential expression, scaling our counts per million can be useful to compare the *same* gene across samples. 
+
 ```{r pca}
+##############################################
+# Normalisation and exploring the experiment
+##############################################
+
+### Counts per million
+
+# Each sample has its own library size
+# Work through columns one at a time
+
+# Copy count matrix so dimensions are the same
+cpm <- count_matrix
+
+# For each column i take col of counts
+# divide it by that sample's lib size
+# multiply by a million
+# and put answer back in the count matrix copy cpm
+for (i in 1:ncol(count_matrix)) {
+  cpm[, i] <- count_matrix[, i] / library_sizes[i] * 1e6
+}
+
+# Check that we still have the same number genes and six samples
+dim(cpm)
+# Inspect results
+head(cpm)
+# and confirm that every column of CPM matrix sum is exactly one mill 1e+06
+colSums(cpm)
+
+
+### 6. Filtering low-count genes
+
+# We cannot reliably test genes with almost no reads anywhere
+# They inflate the multiple-testing correction we apply later
+# costing us the power to detect genes of interest
+
+# A widely used rule is to keep a gene if it has a CPM above 1 in at least as many samples as the smallest group
+# Our smallest group has three replicates
+
+keep <- rowSums(cpm > 1) >= 3
+table(keep)
+
+# The expression cpm > 1 gives a boolean matrix the same shape as cpm
+# R treats TRUE as 1, so rowSums() of that matrix counts, for each gene, how many samples passed
+# We then keep the genes where that count is at least three
+
+# Apply the filter to both matrices
+counts_filtered <- count_matrix[keep, ]
+cpm_filtered <- cpm[keep, ]
+dim(count_matrix)
+dim(counts_filtered)
+
+# Filtering through a logical vector before the comma, all columns kept
+# Note that we keep the filtered raw counts as well
+# DESeq2 next week wants raw counts, not CPM, because it models the counting process itself
+# The CPM matrix is for exploration and plotting only
+
+### 7. Log transformation
+
+# Count data are strongly skewed
+# A handful of genes carry enormous counts and dominate every plot
+# Taking logarithms compresses that range
+# As always, we add 1 first, because the log of zero is undefined
+
+log_cpm <- log2(cpm_filtered + 1)
+
+# Inspect the log CPM matrix
+dim(log_cpm)
+head(log_cpm)
+
+# Earlier in the srcipt we used log10 to squash the y-axis of a boxplot
+# Here we switch to log2, and the change is deliberate
+# Base 2 is conventional in genomics because a difference of 1 on the log2 scale means a doubling of expression
+# ...a difference of 2 means a fourfold change, and so on
+# That interpretation carries directly into the log2 fold changes we calculate later in the analysis
+# For simply squashing a plot's axis either base works; for talking about fold changes, base 2 is the one that lets you read the number
+
+### 8. Did the normalisation work?
+
+# We have claimed that normalisation makes samples comparable
+# Do not take it on trust. Draw the distributions before and after and look.
+# Because both matrices are numeric, base R gives one box per sample from a single line of code
+
+boxplot(
+  log2(counts_filtered + 1),
+  las = 2,
+  ylab = "log2(count + 1)",
+  main = "Before normalisation"
+)
+
+boxplot(
+  log_cpm,
+  las = 2,
+  ylab = "log2(CPM + 1)",
+  main = "After normalisation"
+)
+
+##################################
+# Principal component analysis ###
+##################################
+
+# Let's consider
+# if the two stages really differ
+# ...samples from the same stage should look more like each other than like samples from the other stage
+
+# Our data have thousands of dimensions, one per gene, and we cannot draw that
+# PCA finds a small number of new axes, called principal components, that capture as much of the variation as possible
+# It lets us show six samples measured on thousands of genes on an ordinary scatter plot
+# PCA needs parts per million
+
+# Each component is built from a combination of many genes
+# PC1 is the direction along which the samples differ most
+# PC2 the next most, and so on
+# If the experiment worked, PC1 usually separates the conditions
+
+# 9.1 Transposing
+# Risk of silent error here! 
+
+# Transpose log-CPM matrix so samples are rows and genes are columns for prcomp()
+# Run PCA to summarise the major patterns of variation between samples
+pca <- prcomp(t(log_cpm))
+dim(pca$x)
+rownames(pca$x)
+
+# The sample coordinates live in pca$x
+# ...so if I ran colnames(pca$x) I get "PC1" "PC2" "PC3" "PC4" "PC5" "PC6"
+
+# Thousands of gene-expression measurements per sample → PCA 
+# → a few summary dimensions (PC1, PC2, etc.) describing the major differences between samples
+
+# PC1 → captures the most variation
+# PC2 → captures the second most
+# PC3 → captures the third most
+# PC4 → captures the fourth most
+...
+# Look at how much variation each component captures
+percent_var <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
+
+# Inspect variation explained by the first four (highest-ranked) PCs
+percent_var[1:4]
+
+# Breaking this down...
+# prcomp() stores a standard deviation for each component in pca$sdev
+# Variance is the square of standard deviation, so ^2
+# Dividing each variance by the total gives each component's share
+# Multiplying by 100 makes it a percentage
+
+# Create a data frame containing each sample's coordinates
+# on PC1 and PC2 (the two components explaining the most variation)
+ca_df <- data.frame(
+  sample_id = rownames(pca$x),
+  PC1 = pca$x[, 1],
+  PC2 = pca$x[, 2]
+)
+
+# Add sample metadata so PCA points can be identified by condition/stage
+pca_df <- merge(pca_df, sample_metadata, by = "sample_id")
+pca_df
+
+# ...note, a biologically important treatment effect can still be relatively small and therefore not obvious in those first two PCs
+
+### 10. Building the PCA figure with ggplot2
+# The single most informative figure in a routine RNA-seq analysis
+# So we create it slowly and thoughtfully
+
+# 1. Data frame, first argument to ggplot()
+# 2. Then aesthetic mapping, which column becomes x and y, colour
+# ... we'll get an empty panel with correctly scaled axes
+ggplot(pca_df, aes(x = PC1, y = PC2))
+
+# 3. Now we give geom argument, what is actually drawn
+# Six points
+ggplot(pca_df, aes(x = PC1, y = PC2)) +
+  geom_point()
+
+# 4. Now we map the stage to colour and make points bigger
+# Note, if the value comes from a column of your data, it goes inside aes()
+# If you picked it yourself, it goes outside
+# The same holds for colour, fill, size, shape and alpha
+ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
+  geom_point(size = 4)
+
+# 5. Set the colours explicitly for reporting
+# Name them after the factor levels to the colour always follows the group
+# Always use levels() e.g., pca_df$condition to check correct naming of data
+ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
+  geom_point(size = 4) +
+  scale_colour_manual(values = c("a" = "#66c2a5", "b" = "#fc8d62")) +
+  theme_bw()
+
+# 10.2 Labels and saving
+
+# Set ggplot object for PCA plot
+# paste0() glues strings together without a separator
+p_pca <- ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
+  geom_point(size = 4) +
+  scale_colour_manual(values = c("a" = "#66c2a5", "b" = "#fc8d62")) +
+  labs(
+    title = "PCA of normalised expression",
+    x = paste0("PC1 (", percent_var[1], "% variance)"),
+    y = paste0("PC2 (", percent_var[2], "% variance)"),
+    colour = "Stage"
+  ) +
+  theme_bw()
+
+# Draw object
+p_pca
+
+# Label the points
+# I'm using ggrepel rather than manually setting using vjust
+# OPTIONAL ADDITION confirmed by unit chair to be acceptable
+
+p_pca_labels <- p_pca +
+  geom_text_repel(
+    aes(label = sample_id),
+    size = 3,
+    show.legend = FALSE
+  )
+
+# Display graph
+p_pca_labels
+
+# Save as png using ggsave()
+# A resolution of 300 dpi is the usual minimum for a journal figure
+ggsave(
+  filename = "figures/pca_plot.png",
+  plot = p_pca_labels,
+  width = 6,
+  height = 5,
+  dpi = 300
+)
+
+# Say a b sample appeared among the a
+# List three possible explanations ranging from a labelling mistake in the metadata to genuine biology
+# How would we tell them apart?
+# ...my answers are a) metadata labeling mistake in the a ggplot mapping or earlier
+# b) one sample didn't ferment as expected
+# c) sample might have a technical/sample qual issue, lower seq qual or unusual lib size
+# ...contamination, poor alignment, etc. I'd go back to QC
+
+# If PC1 separates your conditions and explains a large share of the variance
+# ...the experiment has a strong effect and differential expression will find plenty of genes 
+# If the conditions do not separate at all, be cautious about any gene list you produce afterwards
+# Look at the data before you test it
 
 ```
 

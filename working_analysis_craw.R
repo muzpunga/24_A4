@@ -273,17 +273,17 @@ sample_metadata$sample_id
 # Now force the columns into the metadata order and check
 count_matrix <- count_matrix[, sample_metadata$sample_id]
 all(colnames(count_matrix) == sample_metadata$sample_id)
+identical(colnames(count_matrix), rownames(sample_metadata))
+
 
 # Also get R to check for us
 stopifnot(all(colnames(count_matrix) == sample_metadata$sample_id))
+stopifnot(identical(colnames(count_matrix), rownames(sample_metadata)))
 
 ### Always reorder the matrix columns to match the metadata rows
 # ...always assert that they match
 # ...and never continue past a failed check
 
-####################################
-# END OF FIRST SECTION             #
-####################################
 
 ####################################
 # Library sizes and read assignments
@@ -339,8 +339,6 @@ qc_table
 # We need to merge condition alongside the library size for coloured bars
 qc_table <- merge(qc_table, sample_metadata, by = "sample_id")
 qc_table
-
-
 
 # Fill aesthetics maps a column to bar colour
 # theme_bw() function replaces the grey default background
@@ -426,10 +424,18 @@ dim(count_matrix_10)
 # Checked that the samples lined up 
 # ...and looked at library sizes and assignment rates
 
+####################################
+# END OF FIRST SECTION             #
+####################################
+
 
 ##############################################
 # Normalisation and exploring the experiment
 ##############################################
+
+# Define our library sizes again
+library_sizes <- colSums(count_matrix)
+round(library_sizes / 1e6, 2)
 
 ### 5. Counts per million
 
