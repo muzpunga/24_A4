@@ -574,7 +574,7 @@ rownames(pca$x)
 # PC2 → captures the second most
 # PC3 → captures the third most
 # PC4 → captures the fourth most
-...
+
 # Look at how much variation each component captures
 percent_var <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
 
