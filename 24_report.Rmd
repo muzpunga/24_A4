@@ -82,7 +82,7 @@ class(sample_metadata$condition)
 str(sample_metadata)
 
 # We want condition a to be the reference
-# ...so that later a positive fold change will mean "higher in b than a"
+# ...so that later a positive fold change will mean "higher in B than A"
 
 # Convert the condition column to a factor with a as the reference level
 sample_metadata$condition <- factor(
@@ -581,7 +581,7 @@ percent_var[1:4]
 
 # Create a data frame containing each sample's coordinates
 # on PC1 and PC2 (the two components explaining the most variation)
-ca_df <- data.frame(
+pca_df <- data.frame(
   sample_id = rownames(pca$x),
   PC1 = pca$x[, 1],
   PC2 = pca$x[, 2]
@@ -619,7 +619,7 @@ ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
 # Always use levels() e.g., pca_df$condition to check correct naming of data
 ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
   geom_point(size = 4) +
-  scale_colour_manual(values = c("a" = "#66c2a5", "b" = "#fc8d62")) +
+  scale_colour_manual(values = c("A" = "#66c2a5", "B" = "#fc8d62")) +
   theme_bw()
 
 # 10.2 Labels and saving
@@ -628,7 +628,7 @@ ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
 # paste0() glues strings together without a separator
 p_pca <- ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
   geom_point(size = 4) +
-  scale_colour_manual(values = c("a" = "#66c2a5", "b" = "#fc8d62")) +
+  scale_colour_manual(values = c("A" = "#66c2a5", "B" = "#fc8d62")) +
   labs(
     title = "PCA of normalised expression",
     x = paste0("PC1 (", percent_var[1], "% variance)"),

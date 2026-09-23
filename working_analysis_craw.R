@@ -589,7 +589,7 @@ percent_var[1:4]
 
 # Create a data frame containing each sample's coordinates
 # on PC1 and PC2 (the two components explaining the most variation)
-ca_df <- data.frame(
+pca_df <- data.frame(
   sample_id = rownames(pca$x),
   PC1 = pca$x[, 1],
   PC2 = pca$x[, 2]
