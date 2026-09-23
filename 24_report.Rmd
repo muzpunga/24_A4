@@ -40,7 +40,7 @@ dir.create("figures", showWarnings = FALSE)
 ```
 
 This report analyses the cohort assigned to group ``r params$group_id``,
-gene of interest ``r params$gene_of_interest``.
+gene of interest ``r params$gene_of_interest``. 
 
 # 1. Count matrix and metadata
 
