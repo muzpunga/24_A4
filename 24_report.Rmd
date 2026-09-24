@@ -432,7 +432,8 @@ To correct for sequencing depth, we divide each count by the sample's library si
 This is to make our counts more readable. 
 
 Scaling like this, however, does not correct for gene length. For this reason, counts per million values cannot be compared between different genes. 
-They can be compared for the When we are looking to do differential expression, scaling our counts per million can be useful to compare the *same* gene across samples. 
+
+When we are looking to do differential expression, scaling our counts per million can be useful to compare the *same* gene across samples. 
 
 ```{r pca}
 ##############################################
@@ -462,8 +463,7 @@ head(cpm)
 # and confirm that every column of CPM matrix sum is exactly one mill 1e+06
 colSums(cpm)
 
-
-### 6. Filtering low-count genes
+### Filtering low-count genes
 
 # We cannot reliably test genes with almost no reads anywhere
 # They inflate the multiple-testing correction we apply later
@@ -471,26 +471,23 @@ colSums(cpm)
 
 # A widely used rule is to keep a gene if it has a CPM above 1 in at least as many samples as the smallest group
 # Our smallest group has three replicates
+# table() will show us boolean TRUE FALSE values for how many genes passed this filter
 
 keep <- rowSums(cpm > 1) >= 3
 table(keep)
 
-# The expression cpm > 1 gives a boolean matrix the same shape as cpm
-# R treats TRUE as 1, so rowSums() of that matrix counts, for each gene, how many samples passed
-# We then keep the genes where that count is at least three
-
-# Apply the filter to both matrices
+# Apply the filter to both matrices and retain all columns
+# Check how many genes were dropped match the filter above
 counts_filtered <- count_matrix[keep, ]
 cpm_filtered <- cpm[keep, ]
 dim(count_matrix)
 dim(counts_filtered)
 
-# Filtering through a logical vector before the comma, all columns kept
 # Note that we keep the filtered raw counts as well
 # DESeq2 next week wants raw counts, not CPM, because it models the counting process itself
 # The CPM matrix is for exploration and plotting only
 
-### 7. Log transformation
+### Log transformation
 
 # Count data are strongly skewed
 # A handful of genes carry enormous counts and dominate every plot
@@ -510,12 +507,13 @@ head(log_cpm)
 # That interpretation carries directly into the log2 fold changes we calculate later in the analysis
 # For simply squashing a plot's axis either base works; for talking about fold changes, base 2 is the one that lets you read the number
 
-### 8. Did the normalisation work?
+### Did the normalisation work?
 
-# We have claimed that normalisation makes samples comparable
-# Do not take it on trust. Draw the distributions before and after and look.
+# Draw the distributions before and after to manually check that normalisation has worked
+# Checking our samples are now comparable after normalisation
 # Because both matrices are numeric, base R gives one box per sample from a single line of code
 
+# Before normalisation
 boxplot(
   log2(counts_filtered + 1),
   las = 2,
@@ -523,6 +521,7 @@ boxplot(
   main = "Before normalisation"
 )
 
+# After normalisation
 boxplot(
   log_cpm,
   las = 2,
@@ -539,7 +538,7 @@ boxplot(
 # ...samples from the same stage should look more like each other than like samples from the other stage
 
 # Our data have thousands of dimensions, one per gene, and we cannot draw that
-# PCA finds a small number of new axes, called principal components, that capture as much of the variation as possible
+# PCA finds a small number of new axes, principal components, that capture as much of the variation as possible
 # It lets us show six samples measured on thousands of genes on an ordinary scatter plot
 # PCA needs parts per million
 
@@ -548,14 +547,24 @@ boxplot(
 # PC2 the next most, and so on
 # If the experiment worked, PC1 usually separates the conditions
 
-# 9.1 Transposing
-# Risk of silent error here! 
+### Transposing
 
-# Transpose log-CPM matrix so samples are rows and genes are columns for prcomp()
+# prcomp() expects observations x variables
+# We have genes x samples, but our variables are genes
+# So we need to switch! That's what t() does
 # Run PCA to summarise the major patterns of variation between samples
 pca <- prcomp(t(log_cpm))
+
+# We should have the same number of PCA components as we do samples
 dim(pca$x)
+# Check that our row names have been switched to samples
 rownames(pca$x)
+
+# Add stop checks so R can check for us too
+stopifnot(
+  nrow(pca$x) == ncol(log_cpm),
+  all(rownames(pca$x) == colnames(log_cpm))
+)
 
 # The sample coordinates live in pca$x
 # ...so if I ran colnames(pca$x) I get "PC1" "PC2" "PC3" "PC4" "PC5" "PC6"
@@ -568,17 +577,18 @@ rownames(pca$x)
 # PC3 → captures the third most
 # PC4 → captures the fourth most
 
-# Look at how much variation each component captures
-percent_var <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
-
-# Inspect variation explained by the first four (highest-ranked) PCs
-percent_var[1:4]
-
-# Breaking this down...
+# Look at how much percent variation each component captures
 # prcomp() stores a standard deviation for each component in pca$sdev
 # Variance is the square of standard deviation, so ^2
 # Dividing each variance by the total gives each component's share
 # Multiplying by 100 makes it a percentage
+percent_var <- round(
+  100 * pca$sdev^2 / sum(pca$sdev^2),
+  1
+)
+
+# Inspect variation explained by the first four (highest-ranked) PCs
+percent_var[1:4]
 
 # Create a data frame containing each sample's coordinates
 # on PC1 and PC2 (the two components explaining the most variation)
@@ -589,96 +599,85 @@ pca_df <- data.frame(
 )
 
 # Add sample metadata so PCA points can be identified by condition/stage
+# sample_id is the shared key to identify PCA
 pca_df <- merge(pca_df, sample_metadata, by = "sample_id")
 pca_df
 
 # ...note, a biologically important treatment effect can still be relatively small and therefore not obvious in those first two PCs
 
-### 10. Building the PCA figure with ggplot2
+### Building the PCA figure with ggplot2
 # The single most informative figure in a routine RNA-seq analysis
-# So we create it slowly and thoughtfully
 
-# 1. Data frame, first argument to ggplot()
-# 2. Then aesthetic mapping, which column becomes x and y, colour
-# ... we'll get an empty panel with correctly scaled axes
-ggplot(pca_df, aes(x = PC1, y = PC2))
-
-# 3. Now we give geom argument, what is actually drawn
-# Six points
-ggplot(pca_df, aes(x = PC1, y = PC2)) +
-  geom_point()
-
-# 4. Now we map the stage to colour and make points bigger
 # Note, if the value comes from a column of your data, it goes inside aes()
 # If you picked it yourself, it goes outside
 # The same holds for colour, fill, size, shape and alpha
-ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
-  geom_point(size = 4)
 
-# 5. Set the colours explicitly for reporting
+## Data frame
+# We map to our PCA dataframe pca_df
+
+## Aesthetic mapping
+# Map our top PCA points to x and y, and condition to colour
+
+## Geom
+# We set the size of points with geom_point and draw
+# We label points with sample_id using ggrepel rather than manually setting using vjust
+# OPTIONAL ADDITION confirmed by unit chair to be acceptable
+
+### scale_colour_manual
 # Name them after the factor levels to the colour always follows the group
 # Always use levels() e.g., pca_df$condition to check correct naming of data
-ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
-  geom_point(size = 4) +
-  scale_colour_manual(values = c("A" = "#66c2a5", "B" = "#fc8d62")) +
-  theme_bw()
+pca_df$condition
 
-# 10.2 Labels and saving
-
+## Labels
 # Set ggplot object for PCA plot
 # paste0() glues strings together without a separator
-p_pca <- ggplot(pca_df, aes(x = PC1, y = PC2, colour = condition)) +
+
+## Finally, theme_bw() just gives us a classic background colour scheme
+
+# Draw the plot!
+p_pca <- ggplot(
+  pca_df,
+  aes(x = PC1, y = PC2, colour = condition)
+) +
   geom_point(size = 4) +
-  scale_colour_manual(values = c("A" = "#66c2a5", "B" = "#fc8d62")) +
+  geom_text_repel(
+    aes(label = sample_id),
+    size = 3,
+    show.legend = FALSE
+  ) +
+  scale_colour_manual(
+    values = c("A" = "#66c2a5", "B" = "#fc8d62")
+  ) +
   labs(
     title = "PCA of normalised expression",
     x = paste0("PC1 (", percent_var[1], "% variance)"),
     y = paste0("PC2 (", percent_var[2], "% variance)"),
-    colour = "Stage"
+    colour = "Condition"
   ) +
   theme_bw()
 
 # Draw object
 p_pca
 
-# Label the points
-# I'm using ggrepel rather than manually setting using vjust
-# OPTIONAL ADDITION confirmed by unit chair to be acceptable
-
-p_pca_labels <- p_pca +
-  geom_text_repel(
-    aes(label = sample_id),
-    size = 3,
-    show.legend = FALSE
-  )
-
-# Display graph
-p_pca_labels
+## IMPORTANT! 
+# If the labels are confusing, try running that block again
+# ggrepel will dynamically label the points so a reset will often fix funny positioning
 
 # Save as png using ggsave()
 # A resolution of 300 dpi is the usual minimum for a journal figure
 ggsave(
   filename = "figures/pca_plot.png",
-  plot = p_pca_labels,
+  plot = p_pca,
   width = 6,
   height = 5,
   dpi = 300
 )
 
-# Say a b sample appeared among the a
-# List three possible explanations ranging from a labelling mistake in the metadata to genuine biology
-# How would we tell them apart?
-# ...my answers are a) metadata labeling mistake in the a ggplot mapping or earlier
-# b) one sample didn't ferment as expected
-# c) sample might have a technical/sample qual issue, lower seq qual or unusual lib size
-# ...contamination, poor alignment, etc. I'd go back to QC
-
-# If PC1 separates your conditions and explains a large share of the variance
-# ...the experiment has a strong effect and differential expression will find plenty of genes 
-# If the conditions do not separate at all, be cautious about any gene list you produce afterwards
-# Look at the data before you test it
-
 ```
+
+We can see that PC1 has separated our conditions and explains a large share of the variance, suggesting that the experiment has had a strong effect and differential expression will find plenty of genes. 
+
+**Not sure if this wording is accurate here**
 
 # 3. Differential expression
 
