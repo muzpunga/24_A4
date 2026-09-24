@@ -341,9 +341,16 @@ qc_table
 # Add two more columns using existing columns
 qc_table$total_reads <- qc_table$library_size + qc_table$unassigned
 qc_table$percent_assigned <- 100 * qc_table$library_size / qc_table$total_reads
+
+# Define sample order for plots so samples are grouped by condition
+plot_sample_order <- sample_metadata$sample_id[
+  order(sample_metadata$condition, sample_metadata$sample_id)
+]
+
+# Review table so far
 qc_table
 
-# A healthy RNA-seq sample from a well-annotated genome such as yeast should assign a large majority of its reads to genes
+# A healthy RNA-seq sample from a well-annotated genome should assign a large majority of its reads to genes
 # A sample that is markedly worse than the others is a candidate for exclusion
 # Should a least be flagged in report
 
@@ -351,6 +358,14 @@ qc_table
 
 # We need to merge condition alongside the library size for coloured bars
 qc_table <- merge(qc_table, sample_metadata, by = "sample_id")
+
+# Preserve the chosen sample order in ggplot
+qc_table$sample_id <- factor(
+  qc_table$sample_id,
+  levels = plot_sample_order
+)
+
+# Review again
 qc_table
 
 # Fill aesthetics maps a column to bar colour
@@ -387,10 +402,11 @@ ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
 # Log transformation makes the distributions easier to compare across samples
 
 # Draw histogram of counts across samples
+# Using the plot_sample_order var again to group samples
 # The las = 2 argument turns the sample labels sideways so they fit
 # Logarithm cannot take zero so we add 1 across whole matrix
 boxplot(
-  log10(count_matrix + 1),
+  log10(count_matrix[, plot_sample_order] + 1),
   las = 2,
   ylab = "log10(count + 1)",
   main = "Distribution of gene counts per sample"
