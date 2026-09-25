@@ -703,8 +703,141 @@ We can see that PC1 has separated our conditions and explains a large share of t
 
 # 4. Significant genes
 
-```{r significant}
+Here we are identifying the significant genes at padj < 0.05 and an absolute log2 fold change above 1, and splitting them by direction.
 
+We rely on the following data objects returned by the DESeq2 analysis performed above:
+
+- `dds` — not strictly needed for the basic filtering of significant genes, but useful downstream for plots/checks.
+- `res` - the original, unshrunken DESeq2 B-vs-A results; useful for checking/testing and downstream analysis. 
+- `res_shrunk` — shrunken results, which are used to construct our master data frame for identifying significant genes. 
+- The correct coefficient used in lfcShrink() — it should come from resultsNames(dds) explicitly. 
+
+```{r significant}
+###################################
+# Identifying significant genes ###
+###################################
+
+# Use the shrunken fold changes for ranking genes, for plotting, and for deciding which genes are biologically interesting
+# Use the unshrunken p-values and adjusted p-values for deciding which genes are statistically significant
+# Shrinkage changes the effect sizes, not the significance
+
+# Turn the shrunken results into a plain data frame
+# The third line reorders the columns so that gene_id comes first
+res_df <- as.data.frame(res_shrunk)
+res_df$gene_id <- rownames(res_shrunk)
+res_df <- res_df[, c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "pvalue", "padj")]
+head(res_df)
+
+# Remove the genes DESeq2 could not test, then sort by adjusted p-value
+# !is.na() keeps the rows that have a real adjusted p-value
+res_df <- res_df[!is.na(res_df$padj), ]
+res_df <- res_df[order(res_df$padj), ]
+head(res_df, 10)
+
+# Apply both thresholds
+# Statistical significance and a meaningful effect size are different requirements
+# A good gene list demands both
+# The abs() function takes the absolute value
+# so this keeps genes that at least doubled in either direction
+# Both conditions must hold
+sig_genes <- res_df[res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1, ]
+
+# Inspect the number of genes you get and the first few
+nrow(sig_genes)
+head(sig_genes)
+
+# Split them by direction
+# Remember that positive means higher in condition B, because A is the reference
+up_in_b <- sig_genes[sig_genes$log2FoldChange > 0, ]
+down_in_b <- sig_genes[sig_genes$log2FoldChange < 0, ]
+nrow(up_in_b)
+nrow(down_in_b)
+
+# How many genes did DESeq2 leave untested
+# so how many have padj set to NA?
+sum(is.na(res$padj))
+
+### Checking the result with our own eyes
+
+# Take the top gene and plot its normalised counts in each sample
+top_gene <- res_df$gene_id[1]
+top_gene
+plotCounts(dds, gene = top_gene, intgroup = "condition")
+
+# The three A replicates should sit apart from the three B
+# If they overlap, look at metadata closely to rule out labelling error
+
+### Building the same figures in ggplot2 for a publishable version
+
+### Calculate the top three genes
+
+# This code is adapted from the unit content with suggestions from CoPilot
+# Using index range from 1 to 3 top genes
+# Because res_df is sorted by padj, indexing gives us the most significant genes
+top_three_genes <- res_df$gene_id[1:3]
+top_three_genes
+
+# Extract normalised counts for the three most significant genes
+# lapply(top_three_genes, function(gene) { runs function on each top gene
+# gives us a list of three data frames so do.call(rbind, ...) stacks vertically
+# it then runs the loop of plotcounts to get norm counts on each gene
+top_three_counts <- do.call(
+  rbind,
+  lapply(top_three_genes, function(gene) {
+    
+    gene_norm <- plotCounts(
+      dds,
+      gene = gene,
+      intgroup = "condition",
+      returnData = TRUE
+    )
+    
+    # Add sample IDs from the row names
+    gene_norm$sample_id <- rownames(gene_norm)
+    
+    # Record which gene these counts belong to
+    gene_norm$gene <- gene
+    
+    return(gene_norm)
+  })
+)
+
+# Set gene factor levels to preserve significance order
+top_three_counts$gene <- factor(
+  top_three_counts$gene,
+  levels = top_three_genes
+)
+
+# Plot all three genes
+top_three_sig_genes <- ggplot(top_three_counts,
+       aes(x = condition, y = count, colour = condition)) +
+  geom_point(size = 4) +
+  scale_y_log10() +
+  scale_colour_manual(
+    values = c("A" = "#66c2a5", "B" = "#fc8d62")
+  ) +
+  facet_wrap(~ gene) +
+  labs(
+    x = "Condition",
+    y = "Normalised count"
+  ) +
+  theme_bw()
+
+# OPTIONAL to include sample ids inside ggplot
+#   geom_text_repel(aes(label = sample_id), size = 3, show.legend = FALSE) +
+# But I think it's too squished once rendered
+
+# Draw object
+top_three_sig_genes
+
+# OPTIONAL saving
+ggsave(
+  filename = "figures/top_three_sig_genes.png",
+  plot = top_three_sig_genes,
+  width = 6,
+  height = 5,
+  dpi = 300
+)
 ```
 
 # 5. Volcano plot and heatmap
