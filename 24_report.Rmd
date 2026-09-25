@@ -412,6 +412,21 @@ boxplot(
   main = "Distribution of gene counts per sample"
 )
 
+# Finally, check what working tables we've created thus far
+ls()
+```
+
+# 2. Normalisation and PCA
+
+To correct for sequencing depth, we divide each count by the sample's library size, before multiplying by one million. 
+
+This is to make our counts more readable. 
+
+Scaling like this, however, does not correct for gene length. For this reason, counts per million values cannot be compared between different genes. 
+
+When we are looking to do differential expression, scaling our counts per million can be useful to compare the *same* gene across samples. 
+
+```{r pca}
 ####################################
 # Filtering genes with no expression
 ####################################
@@ -437,21 +452,6 @@ dim(count_matrix)
 # Summary statistics for only genes with reads
 dim(count_matrix_filtered)
 
-# Finally, check what working tables we've created thus far
-ls()
-```
-
-# 2. Normalisation and PCA
-
-To correct for sequencing depth, we divide each count by the sample's library size, before multiplying by one million. 
-
-This is to make our counts more readable. 
-
-Scaling like this, however, does not correct for gene length. For this reason, counts per million values cannot be compared between different genes. 
-
-When we are looking to do differential expression, scaling our counts per million can be useful to compare the *same* gene across samples. 
-
-```{r pca}
 ##############################################
 # Normalisation and exploring the experiment
 ##############################################
