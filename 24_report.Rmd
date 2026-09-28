@@ -32,10 +32,6 @@ library(org.Sc.sgd.db)
 library(AnnotationDbi)
 library(ggrepel)
 
-# Suggested library green lit by unit chair for dynamic labelling
-# OPTIONAL
-library(ggrepel)
-
 # Create figures directory if it does not already exist
 dir.create("figures", showWarnings = FALSE)
 ```
@@ -775,13 +771,12 @@ par(mfrow = c(1, 2)) # 1 row, 2 columns
 plotMA(res, ylim = c(-6, 6), main = "Before shrinkage")
 # The funnel shape to the left is created by weakly expressed genes fan out to extreme fold changes
 
+# extract the shrunked counts for us to explore the significant genes.
 res_shrunk <- lfcShrink(dds, coef = "condition_B_vs_A", type = "apeglm")
 plotMA(res_shrunk, ylim = c(-6, 6), main = "After shrinkage")
 #The funnel collapses. The strong, well-measured genes remain out at the edges
 par(mfrow = c(1, 1)) # 1 row, 1 column
 
-# extract the shrunked counts for us to explore the significant genes.
-res_shrunk <- lfcShrink(dds, coef = "condition_B_vs_A", type = "normal")
 ```
 
 # 4. Significant genes
