@@ -539,3 +539,23 @@ dotplot(
   ggtitle("Enriched biological processes: B versus A")
 
 dev.off()
+
+
+
+```{r significant}
+res_df <- as.data.frame(res_shrunk)
+res_df$gene_id <- rownames(res_shrunk)
+res_df <- res_df[, c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "pvalue", "padj")]
+head(res_df)
+# we now have beautiful gene IDs with their fold change, adjusted p-values, etc.
+
+# Remove the genes DESeq2 could not test (those with NA padj), then sort by adjusted p-value.
+res_df <- res_df[!is.na(res_df$padj), ]
+res_df <- res_df[order(res_df$padj), ]
+head(res_df, 10)
+
+# Filter using significance (5%) and fold change (absolute log2 > 1) thresholds.
+sig_genes <- res_df[res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1, ]
+paste0("Genes having significance and fold change : ", nrow(sig_genes))
+head(sig_genes)
+```

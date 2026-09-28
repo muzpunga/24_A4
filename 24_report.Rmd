@@ -30,6 +30,7 @@ library(apeglm)
 library(pheatmap)
 library(org.Sc.sgd.db)
 library(AnnotationDbi)
+library(ggrepel)
 
 # Suggested library green lit by unit chair for dynamic labelling
 # OPTIONAL
@@ -694,248 +695,93 @@ ggsave(
 We can see that PC1 has separated our conditions and explains a large share of the variance, suggesting that the experiment has had a strong effect and differential expression will find plenty of genes. 
 
 **Not sure if this wording is accurate here**
+^ I think that sounds great. My understanding is that when PCA shows clear seperation, then we can expect differently expressed genes.
+I feel magnitude and direction can't be commented on until the DEA, but it's clear something is going on.
 
 # 3. Differential expression
 
 ```{r deseq2}
-#########################################
-# Differential expression with DESeq2 ###
-#########################################
-
-# Week 9: Differential expression with DESeq2
-# Input: filtered raw counts and sample metadata
-# Output: a ranked table of differentially expressed genes.
-# Comparison: b (45 days) vs a (10 days).
-
-# if cols and rows have drifted apart we must stop and examine
-# we set a as the first factor level earlier so it is the reference
+# let's check that the count and metadata are correctly aligned
+dim(counts_filtered)
+head(counts_filtered)
+sample_metadata
+all(colnames(counts_filtered) == sample_metadata$sample_id)
 stopifnot(all(colnames(counts_filtered) == sample_metadata$sample_id))
 
-### 4. Why raw counts?
-# A gene with 10 reads is proportionally far noisier than a gene with 10k reads
-# One makes much more of a difference proportionately to ten than ten thousand
-# DESeq2 insists on the raw integers and does its own normalisation internally
-
-# Normalise for plotting
-# Never normalise before a count-based statistical test
-# DESeq2, edgeR and limma-voom all want raw counts and will normalise for you
-
-
-### 5. Building the DESeqDataSet
-# DESeq2 stores the counts, the metadata and the experimental design together in one object
-# To ensure the three never drift apart
-
-# 5.1 Build the object
-
-# DESeqDataSetFromMatrix is a class, we pass it arguments
-# countData is the gene by sample matrix of raw counts
-# colData is the metadata, one row per column of the count matrix, in the same order
-# design is a formula... ~ is modeled by, so model each gene's expression as a function of the condition column in the metadata
+# DEA is performed on the filtered raw counts, rather than the CPM data
+# Build the DESeqDataSet
 dds <- DESeqDataSetFromMatrix(
-  countData = counts_filtered,
-  colData = sample_metadata,
-  design = ~ condition
-)
-dds
+  countData = counts_filtered, # countData is the gene by sample matrix of raw counts
+  colData = sample_metadata,   # colData is the metadata
+  design = ~ condition)        
+# model each gene's expression as a function of the condition column in the metadata (other variables can be used)
+# If our samples had been prepared in two batches, and we knew which, we would write design = ~ batch + condition
+# The variable of interest (condition) goes last in the formula. Everything before it is a nuisance variable to be adjusted for
 
-# 5.2 The design formula matters
-# ie for batch experiments you would use design = ~ batch + condition
-# The variable of interest goes last in the formula
-# Everybg before it is a nuisance var to be adjusted for
-
-# Check what DESeq2 bks the comparison is
-# We set a as the first factor level, the reference, in w7
-# A positive log fold change will mean higher in the b than the a
-# R will set levels alphabetically if we don't explicitly tell it
+# DESeq() is not in the unit material, but I can't get the resultsNames output correct unless I use it
+dds <- DESeq(dds)
+# check that dds correctly specifies condition
 levels(dds$condition)
 resultsNames(dds)
 
-############################
-######### Step 1 ###########
-############################
-
-### 6. Size factors
-# Dividing by the total library size is distorted by a handful of extremely highly expressed genes
-# This is is a real risk in yeast where a few genes dominate the transcriptome
-
-# DESeq2 is more clever and instead computes a size factor per sample
-# a single number saying how deeply that sample was sequenced compared with a typical sample
-
+# DESeq2 computes a size factor per sample
+# A size factor near 1 means the sample is close to typical. Above 1 means it was sequenced more deeply than average, and DESeq2 will scale it down accordingly.
 dds <- estimateSizeFactors(dds)
 sizeFactors(dds)
 
-# A size factor near 1 means the sample is close to typical
-# Above 1 means it was sequenced more deeply than average
-# ... and DESeq2 will scale it down accordingly
-
-# Comparing size factors with raw lib sizes from last week
-# Should be correlated but not identical
 library_sizes <- colSums(counts_filtered)
-round(library_sizes / mean(library_sizes), 3)
-round(sizeFactors(dds), 3)
+cor_test <- cor.test(
+  library_sizes / mean(library_sizes),
+  sizeFactors(dds),
+  method = "pearson")$estimate
 
-# You can extract the normalised counts if you want to look at them
-# Not used for testing
-norm_counts <- counts(dds, normalized = TRUE)
-head(round(norm_counts, 1))
+data.frame(
+  sample = colnames(dds),
+  libsize_norm = round(library_sizes / mean(library_sizes), 3),
+  sizefactor = round(sizeFactors(dds), 3))
+paste0("Pearson's Correlation Coefficient estimate : ", round(cor_test,3))
+# The correlation close to 1 indicates that DESeq2 size factors are largely tracking sequencing depth. When the correlation is substantially lower, it suggests that composition bias is present and DESeq2's median-ratio normalization is adjusting for more than library size.
 
-############################
-######### Step 2 ###########
-############################
-
-### 7. Dispersion
-# Dispersion measures how much a gene's counts vary between replicates of the same condition
-# ...beyond what the counting process alone would produce
-# It is the parameter that decides whether an observed difference between groups is impressive or ordinary
-
-# With only three replicates per group, estimating a gene's dispersion from its own data is hopeless
-# DESeq2 solves this by looking at all genes together
-# It fits a curve describing how dispersion typically depends on expression level
-# ... then pulls each gene's noisy individual estimate towards that curve
-# This is called shrinkage
-
+# Dispersion and Shrinkage
+# Variance in gene count between replicates is expected. This is referred to as dispersion, and the DEA pipeline 
+# controls for the expected dispersion using the estimateDispersions function
+# the final count is essentially a compromise between the gene specific estimate and the overall fitted trend
+# the blue points that are notably well above the fitted line genes having between-sample variation much larger than expected
 dds <- estimateDispersions(dds)
 plotDispEsts(dds)
 
-# Black points are each gene's own estimate
-# The red line is the fitted trend
-# Blue points are the final, shrunken values actually used for testing
 
-# Note, points circled in blue are genes with unusually high dispersion
-# ...which DESeq2 leaves alone rather than shrinking
-# because forcing them down would produce false positives
-
-# The black cloud should scatter around the red line and blue should sit close
-# A dispersion plot that does not look like this is a red flag
-
-############################
-####### Steps 3 and 4 ######
-############################
-
-### 8. Running the test
-# The DESeq() function performs size factor estimation
-# ...dispersion estimation and model fitting in one call
-
-# We ran the first two steps separately so we could see them
-# Running DESeq() now simply completes the job and won't redo work already done
-
+# Although the DEA steps above were performed manually, 
+# the DESeq() function performs size factor estimation, dispersion estimation and model fitting in one call.
 dds <- DESeq(dds)
 
-### DESeq should print our steps:
-# using pre-existing size factors
-# estimating dispersions
-# found already estimated dispersions, replacing these
-# gene-wise dispersion estimates
-# mean-dispersion relationship
-# final dispersion estimates
-# fitting model and testing
-
-# Always, always check levels before providing arguments
-levels(dds$condition)
-
-# Assign and check results
-# The second name is the numerator and the third is the reference
-# So it is critical we have b before a
 res <- results(dds, contrast = c("condition", "B", "A"))
-res
-
-# The contrast reads as "condition: b versus a"
-# A positive log fold change means higher in the b
-
-############################
-##### Reading results ######
-############################
-
-### 9. Reading the results table
-# Look at the column descriptions that DESeq2 stores with the object
+# A positive log fold change means higher in the B condition.
 
 mcols(res)$description
-
-# > mcols(res)$description
-# "mean of normalized counts for all samples"      
-# "log2 fold change (MLE): condition b vs a"
-# "standard error: condition b vs a"        
-# "Wald statistic: condition b vs a"        
-# "Wald test p-value: condition b vs a"     
-# "BH adjusted p-values"      
-
-# Check the Week 9 content for a full breakdown
-
-# Quick overview
 summary(res)
+# more genes are down regulated, zero outliers, 2% with low count after low count filter
 
-### 10. Why the adjusted p-value?
-
-# A p-value threshold of 0.05 means each gene has a 5 per cent chance of looking significant anyway
-
-# Count how many genes clear the raw threshold
-# sum(res$pvalue < 0.05, na.rm = TRUE)
-
-# Now the adjusted threshold
-# sum(res$padj < 0.05, na.rm = TRUE)
-
-# The na.rm = TRUE argument is needed because DESeq2 sets padj to NA for genes it filtered out as untestable
-# Without it, sum() would return NA
-
-# pvalue <0.05
-# If this gene were truly unchanged, there is only a 5 per cent chance I would see a difference this big
-# Perfectly true for one gene, tested once
-# Useless as a rule for choosing a gene list
-# ...applying it thousands of times guarantees hundreds of mistakes
-
-# padj < 0.05
-# Of all the genes on my final list, about 5 per cent are expected to be false positives
-# A statement about the list as a whole
-# DESeq2 uses the Benjamini-Hochberg procedure to compute it, controlling the false discovery rate
-
-# Always filter on padj 
-# The raw p-value is shown so that you can inspect its distribution, which is a useful diagnostic
-# but it is never the basis for a gene list
-
-### 10.1 The p-value histogram
-# A histogram of the raw p-values is one of the fastest diagnostics available
-
+# diagnostic histogram of p-values
 res_raw_df <- as.data.frame(res)
 
 ggplot(res_raw_df, aes(x = pvalue)) +
   geom_histogram(binwidth = 0.02, boundary = 0) +
   labs(title = "Distribution of raw p-values", x = "p-value", y = "Number of genes") +
   theme_bw()
+# the spike near zero and flat towards one suggest the model is correctly specified
 
-# We want a flat carpet aross most of the range
-# With a spike near zero
-# Flat bit is unchanged genes
-# Spike is real signal
-# A hist that rises towards 1 or that has bumps in the middle means the model is misspecified, do not trust
-
-### 11. Shrinking the fold changes
-# A gene with 4 reads in one group and 1 in the other has a log2 fold change of 2, which looks dramatic and means almost nobg
-# Low-count genes produce wildly exaggerated fold changes
-
-# Look at the problem first with an MA plot
-# puts expression on the x-axis and fold change on the y-axis
-# Every point is a gene
-
+par(mfrow = c(1, 2)) # 1 row, 2 columns
 plotMA(res, ylim = c(-6, 6), main = "Before shrinkage")
+# The funnel shape to the left is created by weakly expressed genes fan out to extreme fold changes
 
-# Notice the funnel shape on the left
-# Weakly expressed genes fan out to extreme fold changes, because they are weakly expressed
-
-# Shrinkage pulls those unreliable estimates towards zero while leaving well-measured genes almost untouched
-# when an estimate is noisy, trust it less
-
-# The coef argument needs the name DESeq2 gave the comparison
-# Print the names and copy the one we want
-resultsNames(dds)
-
-# So we'll use condition_b_vs_a
 res_shrunk <- lfcShrink(dds, coef = "condition_B_vs_A", type = "apeglm")
 plotMA(res_shrunk, ylim = c(-6, 6), main = "After shrinkage")
+#The funnel collapses. The strong, well-measured genes remain out at the edges
+par(mfrow = c(1, 1)) # 1 row, 1 column
 
-# Use the shrunken fold changes for ranking genes, for plotting, and for deciding which genes are biologically interesting
-# Use the unshrunken p-values and adjusted p-values for deciding which genes are statistically significant
-# Shrinkage changes the effect sizes, not the significance
-
+# extract the shrunked counts for us to explore the significant genes.
+res_shrunk <- lfcShrink(dds, coef = "condition_B_vs_A", type = "normal")
 ```
 
 # 4. Significant genes
@@ -1079,8 +925,94 @@ ggsave(
 
 # 5. Volcano plot and heatmap
 
-```{r figures}
+A volcano plot shows effect size on the x-axis and statistical significance on the y-axis. Genes that are both strongly changed and confidently detected sit in the top corners, which is where the name comes from.
 
+Significance is plotted as the negative log of the adjusted p-value, so that small p-values become large numbers. A padj of 0.1 becomes 1. A padj of 0.01 becomes 2. A padj of 0.0001 becomes 4. Smaller p-values climb higher up the y-axis, which is exactly the direction a reader expects.
+
+
+```{r figures}
+res_df$neg_log10_padj <- -log10(res_df$padj)
+head(res_df[, c("gene_id", "log2FoldChange", "padj", "neg_log10_padj")])
+
+# Add a column recording each gene's status. We use the same thresholds as last week, and we name the groups after the stages we actually compared.
+# "Up in B" is not a stylistic choice. Because B is the reference level, a positive fold change means the gene is higher in B than A, and that is the only claim these labels are entitled to make.
+res_df$status <- "Not significant"
+res_df$status[res_df$padj < 0.05 & res_df$log2FoldChange > 1] <- "Up in B"
+res_df$status[res_df$padj < 0.05 & res_df$log2FoldChange < -1] <- "Down in B"
+table(res_df$status)
+
+top10 <- res_df[order(res_df$padj), ][1:10, ]
+
+p_volcano <- ggplot(
+  res_df,
+  aes(
+    x = log2FoldChange,
+    y = neg_log10_padj,
+    colour = status
+  )
+) +
+  geom_point(
+    alpha = 0.6,
+    size = 1.5
+  ) +
+  scale_colour_manual(
+    values = c(
+      "Up in B" = "#d73027",
+      "Down in B" = "#4575b4",
+      "Not significant" = "grey70"
+    )
+  ) +
+  geom_vline(
+    xintercept = c(-1, 1),
+    linetype = "dashed",
+    colour = "grey40"
+  ) +
+  geom_hline(
+    yintercept = -log10(0.05),
+    linetype = "dashed",
+    colour = "grey40"
+  ) +
+  labs(
+    title = "Differential expression: B versus A",
+    x = "log2 fold change (B / A)",
+    y = "-log10 adjusted p-value",
+    colour = ""
+  ) +
+  theme_bw() +
+  geom_text_repel(
+     data = top10,
+     aes(label = gene_id),
+     size = 2.5,
+     colour = "black")
+
+p_volcano
+
+
+
+# Heatmap
+# Heatmaps answer - do the replicates within a group behave alike, and do the two groups (~condition) look different?
+# We plot only the significant genes, because plotting several thousand rows would show nothing but noise.
+# Pull out the significant gene identifiers, then subset the normalised expression matrix.
+
+sig_ids <- res_df$gene_id[res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1]
+sig_ids <- sig_ids[!is.na(sig_ids)]
+length(sig_ids)
+
+heat_matrix <- log_cpm[rownames(log_cpm) %in% sig_ids, ]
+dim(heat_matrix)
+
+# Build an annotation data frame so the heatmap can show which sample belongs to which stage.
+
+annotation_col <- data.frame(Stage = sample_metadata$condition)
+rownames(annotation_col) <- sample_metadata$sample_id
+
+pheatmap(
+  heat_matrix,
+  scale = "row",
+  show_rownames = FALSE,
+  annotation_col = annotation_col,
+  main = "Differentially expressed genes: thin vs early")
+# We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
 ```
 
 # 6. Annotation and GO enrichment
@@ -1311,6 +1243,8 @@ dotplot(ego_down, showCategory = 15) +
 **Enrichment (max 4 sentences):**
 
 **Volcano caption (2 sentences):**
+
+The most striking feature of the volcano plot is its asymmetry. More genes were down regulated in B (147) compared to up regulated in B (27). This means that relative to condition A, condition B is associated predominantly with *reduced* expression of many genes, while only a small number of genes show increased expression. YML123C is the most significant gene in the dataset, with a very large negative fold change (approximately −4.4 log2FC) and an extremely small adjusted p-value. Other genes exhibiting large effect sizes and very small p-values include YDR077W, YDR033W, YFR015C, YGR234W. Overall, the transcriptional response was dominated by gene repression in condition B.
 
 # 9. Session information
 
