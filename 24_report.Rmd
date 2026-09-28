@@ -698,6 +698,243 @@ We can see that PC1 has separated our conditions and explains a large share of t
 # 3. Differential expression
 
 ```{r deseq2}
+#########################################
+# Differential expression with DESeq2 ###
+#########################################
+
+# Week 9: Differential expression with DESeq2
+# Input: filtered raw counts and sample metadata
+# Output: a ranked table of differentially expressed genes.
+# Comparison: b (45 days) vs a (10 days).
+
+# if cols and rows have drifted apart we must stop and examine
+# we set a as the first factor level earlier so it is the reference
+stopifnot(all(colnames(counts_filtered) == sample_metadata$sample_id))
+
+### 4. Why raw counts?
+# A gene with 10 reads is proportionally far noisier than a gene with 10k reads
+# One makes much more of a difference proportionately to ten than ten thousand
+# DESeq2 insists on the raw integers and does its own normalisation internally
+
+# Normalise for plotting
+# Never normalise before a count-based statistical test
+# DESeq2, edgeR and limma-voom all want raw counts and will normalise for you
+
+
+### 5. Building the DESeqDataSet
+# DESeq2 stores the counts, the metadata and the experimental design together in one object
+# To ensure the three never drift apart
+
+# 5.1 Build the object
+
+# DESeqDataSetFromMatrix is a class, we pass it arguments
+# countData is the gene by sample matrix of raw counts
+# colData is the metadata, one row per column of the count matrix, in the same order
+# design is a formula... ~ is modeled by, so model each gene's expression as a function of the condition column in the metadata
+dds <- DESeqDataSetFromMatrix(
+  countData = counts_filtered,
+  colData = sample_metadata,
+  design = ~ condition
+)
+dds
+
+# 5.2 The design formula matters
+# ie for batch experiments you would use design = ~ batch + condition
+# The variable of interest goes last in the formula
+# Everybg before it is a nuisance var to be adjusted for
+
+# Check what DESeq2 bks the comparison is
+# We set a as the first factor level, the reference, in w7
+# A positive log fold change will mean higher in the b than the a
+# R will set levels alphabetically if we don't explicitly tell it
+levels(dds$condition)
+resultsNames(dds)
+
+############################
+######### Step 1 ###########
+############################
+
+### 6. Size factors
+# Dividing by the total library size is distorted by a handful of extremely highly expressed genes
+# This is is a real risk in yeast where a few genes dominate the transcriptome
+
+# DESeq2 is more clever and instead computes a size factor per sample
+# a single number saying how deeply that sample was sequenced compared with a typical sample
+
+dds <- estimateSizeFactors(dds)
+sizeFactors(dds)
+
+# A size factor near 1 means the sample is close to typical
+# Above 1 means it was sequenced more deeply than average
+# ... and DESeq2 will scale it down accordingly
+
+# Comparing size factors with raw lib sizes from last week
+# Should be correlated but not identical
+library_sizes <- colSums(counts_filtered)
+round(library_sizes / mean(library_sizes), 3)
+round(sizeFactors(dds), 3)
+
+# You can extract the normalised counts if you want to look at them
+# Not used for testing
+norm_counts <- counts(dds, normalized = TRUE)
+head(round(norm_counts, 1))
+
+############################
+######### Step 2 ###########
+############################
+
+### 7. Dispersion
+# Dispersion measures how much a gene's counts vary between replicates of the same condition
+# ...beyond what the counting process alone would produce
+# It is the parameter that decides whether an observed difference between groups is impressive or ordinary
+
+# With only three replicates per group, estimating a gene's dispersion from its own data is hopeless
+# DESeq2 solves this by looking at all genes together
+# It fits a curve describing how dispersion typically depends on expression level
+# ... then pulls each gene's noisy individual estimate towards that curve
+# This is called shrinkage
+
+dds <- estimateDispersions(dds)
+plotDispEsts(dds)
+
+# Black points are each gene's own estimate
+# The red line is the fitted trend
+# Blue points are the final, shrunken values actually used for testing
+
+# Note, points circled in blue are genes with unusually high dispersion
+# ...which DESeq2 leaves alone rather than shrinking
+# because forcing them down would produce false positives
+
+# The black cloud should scatter around the red line and blue should sit close
+# A dispersion plot that does not look like this is a red flag
+
+############################
+####### Steps 3 and 4 ######
+############################
+
+### 8. Running the test
+# The DESeq() function performs size factor estimation
+# ...dispersion estimation and model fitting in one call
+
+# We ran the first two steps separately so we could see them
+# Running DESeq() now simply completes the job and won't redo work already done
+
+dds <- DESeq(dds)
+
+### DESeq should print our steps:
+# using pre-existing size factors
+# estimating dispersions
+# found already estimated dispersions, replacing these
+# gene-wise dispersion estimates
+# mean-dispersion relationship
+# final dispersion estimates
+# fitting model and testing
+
+# Always, always check levels before providing arguments
+levels(dds$condition)
+
+# Assign and check results
+# The second name is the numerator and the third is the reference
+# So it is critical we have b before a
+res <- results(dds, contrast = c("condition", "B", "A"))
+res
+
+# The contrast reads as "condition: b versus a"
+# A positive log fold change means higher in the b
+
+############################
+##### Reading results ######
+############################
+
+### 9. Reading the results table
+# Look at the column descriptions that DESeq2 stores with the object
+
+mcols(res)$description
+
+# > mcols(res)$description
+# "mean of normalized counts for all samples"      
+# "log2 fold change (MLE): condition b vs a"
+# "standard error: condition b vs a"        
+# "Wald statistic: condition b vs a"        
+# "Wald test p-value: condition b vs a"     
+# "BH adjusted p-values"      
+
+# Check the Week 9 content for a full breakdown
+
+# Quick overview
+summary(res)
+
+### 10. Why the adjusted p-value?
+
+# A p-value threshold of 0.05 means each gene has a 5 per cent chance of looking significant anyway
+
+# Count how many genes clear the raw threshold
+# sum(res$pvalue < 0.05, na.rm = TRUE)
+
+# Now the adjusted threshold
+# sum(res$padj < 0.05, na.rm = TRUE)
+
+# The na.rm = TRUE argument is needed because DESeq2 sets padj to NA for genes it filtered out as untestable
+# Without it, sum() would return NA
+
+# pvalue <0.05
+# If this gene were truly unchanged, there is only a 5 per cent chance I would see a difference this big
+# Perfectly true for one gene, tested once
+# Useless as a rule for choosing a gene list
+# ...applying it thousands of times guarantees hundreds of mistakes
+
+# padj < 0.05
+# Of all the genes on my final list, about 5 per cent are expected to be false positives
+# A statement about the list as a whole
+# DESeq2 uses the Benjamini-Hochberg procedure to compute it, controlling the false discovery rate
+
+# Always filter on padj 
+# The raw p-value is shown so that you can inspect its distribution, which is a useful diagnostic
+# but it is never the basis for a gene list
+
+### 10.1 The p-value histogram
+# A histogram of the raw p-values is one of the fastest diagnostics available
+
+res_raw_df <- as.data.frame(res)
+
+ggplot(res_raw_df, aes(x = pvalue)) +
+  geom_histogram(binwidth = 0.02, boundary = 0) +
+  labs(title = "Distribution of raw p-values", x = "p-value", y = "Number of genes") +
+  theme_bw()
+
+# We want a flat carpet aross most of the range
+# With a spike near zero
+# Flat bit is unchanged genes
+# Spike is real signal
+# A hist that rises towards 1 or that has bumps in the middle means the model is misspecified, do not trust
+
+### 11. Shrinking the fold changes
+# A gene with 4 reads in one group and 1 in the other has a log2 fold change of 2, which looks dramatic and means almost nobg
+# Low-count genes produce wildly exaggerated fold changes
+
+# Look at the problem first with an MA plot
+# puts expression on the x-axis and fold change on the y-axis
+# Every point is a gene
+
+plotMA(res, ylim = c(-6, 6), main = "Before shrinkage")
+
+# Notice the funnel shape on the left
+# Weakly expressed genes fan out to extreme fold changes, because they are weakly expressed
+
+# Shrinkage pulls those unreliable estimates towards zero while leaving well-measured genes almost untouched
+# when an estimate is noisy, trust it less
+
+# The coef argument needs the name DESeq2 gave the comparison
+# Print the names and copy the one we want
+resultsNames(dds)
+
+# So we'll use condition_b_vs_a
+res_shrunk <- lfcShrink(dds, coef = "condition_B_vs_A", type = "apeglm")
+plotMA(res_shrunk, ylim = c(-6, 6), main = "After shrinkage")
+
+# Use the shrunken fold changes for ranking genes, for plotting, and for deciding which genes are biologically interesting
+# Use the unshrunken p-values and adjusted p-values for deciding which genes are statistically significant
+# Shrinkage changes the effect sizes, not the significance
 
 ```
 
@@ -849,6 +1086,213 @@ ggsave(
 # 6. Annotation and GO enrichment
 
 ```{r enrichment}
+#####################################
+### 6. Annotating the gene names ####
+#####################################
+
+# Bioconductor supplies annotation packages that translate common name from systematic
+# I.e., FMP16 vs YDR070C
+
+# Check columns of library package
+columns(org.Sc.sgd.db)
+
+# Today we'll use common which returns the short name
+# and description which returns a sentence describing what the gene does
+
+# the mapIds() function looks up one identifier type and returns another
+# keys are the identifiers we have
+# keytype says what kind they are
+# ORF for yeast systematic names
+# column says what we want back
+# multiVals = "first" handles the genes that map to more than one name by taking the first
+res_df$gene_name <- mapIds(
+  org.Sc.sgd.db,
+  keys = res_df$gene_id,
+  column = "COMMON",
+  keytype = "ORF",
+  multiVals = "first"
+)
+head(res_df[, c("gene_id", "gene_name", "log2FoldChange", "padj")], 10)
+
+# Add a description
+# some genes will return NA
+# many yeast open reading frames simply have no common name
+# this is a fact about yeast rather than a code error
+# keep the systematic identifier as the primary key
+# common names change over time whereas systematic do not
+res_df$description <- mapIds(
+  org.Sc.sgd.db,
+  keys = res_df$gene_id,
+  column = "DESCRIPTION",
+  keytype = "ORF",
+  multiVals = "first"
+)
+head(res_df$description, 3)
+
+### Challenge 2
+# print top 5 sig genes id, common name, and l2fc
+# order rows by padj for significance, then choose the columns with a vector
+head(res_df[order(res_df$padj), c("gene_id", "gene_name", "log2FoldChange")], 5)
+
+#################################
+### 7. Functional enrichment ####
+#################################
+
+# Gene Ontology over-representation analysis answers whether we have a random sample of the genome
+# or if our listed genes are concentrated in particular biological processes
+# For each bio process it asks whether more of our sig genes belong to that process
+# ...than would be expected by chance
+
+# Pathway enrichment analysis summarises the long gene list into a shorter
+# ...interpret-able list of pathways
+# Instead of having a list of a thousand genes you might get 50/60 bio pathways
+# You can then check which genes are behind these pathways
+
+# Three ingredients
+# 1. Gene list of interest, ie diff expressed genes we want to summarise
+# 2. List of background genes, eg all genes in human genome
+# 3. List of gene sets, essentially groups of related genes
+# ...eg if our list has a lot of genes related to breast cancer
+# ...we'd need to tell our code which genes are involved in breast cancer
+
+# We can then compare our list to the background list
+# That gives us a list of overrepresented pathways
+# e.g., our list of diff expressed genes involves a lot of genes involved in breast cancer
+
+# say we know that ald involves inflammatory processes that involve pro-inflammatory cytokines, e.g., IL-6
+# the question would be: is there an association between our genes diff expressed in alcoholic liver disease
+# ...versus healthy cells, and IL-6 production
+# in other words
+# ...is our list of differentially expressed genes enriched with genes involved in IL-6 synthesis pathway
+
+# We build a contingency table
+# determine whether the fraction of genes of interest in the pathway is higher 
+# ...compared to the fraction of genes outside the pathway, i.e., the background set
+
+### Fishers exact test will give you a p-value for the pathway
+# if the p-value is very low you can safely say that your list is overrepresented
+# E.g., our gene list is enriched with genes involved in IL-6 production
+# IL-6 production is an important pathway in alcoholic liver disease compared to healthy liver cells
+# does not mean it's upregulated, we'd need to check gene list
+# e.g., are those genes associated with the pos regulation of IL-6 production
+# are they positive or negative regulators of that pathway
+
+# multiple testing across pathways mean we will get strong results by chance, ie p value
+# we correct this using multiple testing correction
+# most commonly used method is Benjamini-Hochberg correction
+
+# the p-value is the probability of seeing at least x n of genes out of n genes in our list
+# annotated to a particular gene set term
+# given the proportion of background genes that are annotated to that term
+
+# the closer the p-value is to zero
+# the more significant the particular gene set term associated with the group of genes is
+
+# A common rule to select DEGs is p-val <0.005 and |FC| >2
+
+### 7.1 The gene universe
+# The comparison set is called the universe
+# A gene that DESeq2 never tested (filtered out NA) could never have appeared on the list at all
+# Counting such genes in the background makes the list look more special than it is
+# So the universe is every gene we tested, not every gene in the genome
+
+# Compare the lengths of the gene uni versus sig_ids
+# The universe should be thousands of genes and the significant list a few hundred
+gene_universe <- res_df$gene_id[!is.na(res_df$padj)]
+length(gene_universe)
+length(sig_ids)
+
+# The principle does not change with the size of the effect
+# State the universe you used and make it the genes you tested 
+# A reviewer will ask
+
+### 7.2 Running the analysis
+
+# ont = "BP" restricts the search to biological processes
+# pAdjustMethod = "BH" is the same Benjamini-Hochberg correction
+# ...because we are testing many hypotheses at once, one per GO term
+# GeneRatio is the fraction of your significant genes in that process
+# BgRatio is the fraction of the universe in that process
+# A term is enriched when the first is much larger than the second
+
+ego <- enrichGO(
+  gene = sig_ids,
+  universe = gene_universe,
+  OrgDb = org.Sc.sgd.db,
+  keyType = "ORF",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05
+)
+head(as.data.frame(ego)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
+
+# Visualise top ten terms
+# The dot size shows how many genes are in each term
+# Colour shows adjusted p-value
+# A term with only three genes is rarely worth reporting
+dotplot(ego, showCategory = 15) +
+  labs(title = "Enriched biological processes: b vs a")
+
+# Enrichment analysis described our gene list
+# It shows that our gene list is concentrated in particular annotated processes
+# ...more than a random list of the same size would be
+# That is a useful summary and a good starting point for a hypothesis
+# But its terms are highly redundant
+
+# It does NOT show causation
+# A process appearing in the list does not mean it drives the phenotype
+# It cannot find a process nobody has annotated
+# Poorly studied biology is invisible to this method, by construction
+
+# Treat the output as a summary to be interpreted, not a result to be reported uncritically
+
+### Challenge 3
+# Running the analysis on up-regulated genes only
+
+# Create our list
+up_ids <- res_df$gene_id[res_df$padj < 0.05 & res_df$log2FoldChange > 1]
+up_ids <- up_ids[!is.na(up_ids)]
+
+# Run analysis
+# Update the gene arg to point to up_ids
+ego_up <- enrichGO(
+  gene = up_ids,
+  universe = gene_universe,
+  OrgDb = org.Sc.sgd.db,
+  keyType = "ORF",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05
+)
+head(as.data.frame(ego_up)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
+
+# Visualise top ten terms for upregulated genes
+dotplot(ego_up, showCategory = 15) +
+  labs(title = "Enriched biological processes: B vs A in upregulated genes")
+
+# And now for down regulated genes
+# Create our list
+# Change the log2FoldChange to < -1
+# Splitting by direction is almost always more informative than one combined list
+down_ids <- res_df$gene_id[res_df$padj < 0.05 & res_df$log2FoldChange < -1]
+down_ids <- down_ids[!is.na(down_ids)]
+
+# Run analysis
+# Update the gene arg to point to down_ids
+ego_down <- enrichGO(
+  gene = down_ids,
+  universe = gene_universe,
+  OrgDb = org.Sc.sgd.db,
+  keyType = "ORF",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05
+)
+head(as.data.frame(ego_down)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
+
+# Visualise top ten terms for upregulated genes
+dotplot(ego_down, showCategory = 15) +
+  labs(title = "Enriched biological processes: B vs A in downregulated genes")
 
 ```
 
