@@ -1013,24 +1013,17 @@ pheatmap(
 # 6. Annotation and GO enrichment
 
 ```{r enrichment}
-#####################################
-### 6. Annotating the gene names ####
-#####################################
+##################################
+### Annotating the gene names ####
+##################################
 
 # Bioconductor supplies annotation packages that translate common name from systematic
 # I.e., FMP16 vs YDR070C
 
-# Check columns of library package
-columns(org.Sc.sgd.db)
-
-# Today we'll use common which returns the short name
-# and description which returns a sentence describing what the gene does
-
 # the mapIds() function looks up one identifier type and returns another
-# keys are the identifiers we have
-# keytype says what kind they are
-# ORF for yeast systematic names
-# column says what we want back
+# keys are our gene IDs
+# keytype will be ORF for yeast systematic names
+# we want the common names returned by column
 # multiVals = "first" handles the genes that map to more than one name by taking the first
 res_df$gene_name <- mapIds(
   org.Sc.sgd.db,
@@ -1039,7 +1032,6 @@ res_df$gene_name <- mapIds(
   keytype = "ORF",
   multiVals = "first"
 )
-head(res_df[, c("gene_id", "gene_name", "log2FoldChange", "padj")], 10)
 
 # Add a description
 # some genes will return NA
@@ -1054,86 +1046,31 @@ res_df$description <- mapIds(
   keytype = "ORF",
   multiVals = "first"
 )
-head(res_df$description, 3)
 
-### Challenge 2
-# print top 5 sig genes id, common name, and l2fc
-# order rows by padj for significance, then choose the columns with a vector
-head(res_df[order(res_df$padj), c("gene_id", "gene_name", "log2FoldChange")], 5)
+# Checking top three significant IDs 
+# ensure they mapped with common name and description as expected
+head(res_df[order(res_df$padj), c("gene_id", "gene_name", "log2FoldChange","description")], 3)
 
-#################################
-### 7. Functional enrichment ####
-#################################
+##############################
+### Functional enrichment ####
+##############################
 
-# Gene Ontology over-representation analysis answers whether we have a random sample of the genome
-# or if our listed genes are concentrated in particular biological processes
-# For each bio process it asks whether more of our sig genes belong to that process
-# ...than would be expected by chance
-
-# Pathway enrichment analysis summarises the long gene list into a shorter
-# ...interpret-able list of pathways
-# Instead of having a list of a thousand genes you might get 50/60 bio pathways
-# You can then check which genes are behind these pathways
-
-# Three ingredients
-# 1. Gene list of interest, ie diff expressed genes we want to summarise
-# 2. List of background genes, eg all genes in human genome
-# 3. List of gene sets, essentially groups of related genes
-# ...eg if our list has a lot of genes related to breast cancer
-# ...we'd need to tell our code which genes are involved in breast cancer
-
-# We can then compare our list to the background list
-# That gives us a list of overrepresented pathways
-# e.g., our list of diff expressed genes involves a lot of genes involved in breast cancer
-
-# say we know that ald involves inflammatory processes that involve pro-inflammatory cytokines, e.g., IL-6
-# the question would be: is there an association between our genes diff expressed in alcoholic liver disease
-# ...versus healthy cells, and IL-6 production
-# in other words
-# ...is our list of differentially expressed genes enriched with genes involved in IL-6 synthesis pathway
-
-# We build a contingency table
-# determine whether the fraction of genes of interest in the pathway is higher 
-# ...compared to the fraction of genes outside the pathway, i.e., the background set
-
-### Fishers exact test will give you a p-value for the pathway
-# if the p-value is very low you can safely say that your list is overrepresented
-# E.g., our gene list is enriched with genes involved in IL-6 production
-# IL-6 production is an important pathway in alcoholic liver disease compared to healthy liver cells
-# does not mean it's upregulated, we'd need to check gene list
-# e.g., are those genes associated with the pos regulation of IL-6 production
-# are they positive or negative regulators of that pathway
-
-# multiple testing across pathways mean we will get strong results by chance, ie p value
-# we correct this using multiple testing correction
-# most commonly used method is Benjamini-Hochberg correction
-
-# the p-value is the probability of seeing at least x n of genes out of n genes in our list
-# annotated to a particular gene set term
-# given the proportion of background genes that are annotated to that term
-
-# the closer the p-value is to zero
-# the more significant the particular gene set term associated with the group of genes is
-
-# A common rule to select DEGs is p-val <0.005 and |FC| >2
-
-### 7.1 The gene universe
-# The comparison set is called the universe
-# A gene that DESeq2 never tested (filtered out NA) could never have appeared on the list at all
-# Counting such genes in the background makes the list look more special than it is
+# GO enrichment compares our significant genes with a background list
+# this is known as the gene universe
+# This should include genes that had the opportunity to be identified
+# (not filtered as NA in DESeq2)
 # So the universe is every gene we tested, not every gene in the genome
 
-# Compare the lengths of the gene uni versus sig_ids
+# Compare the lengths of the gene universe versus sig_ids
 # The universe should be thousands of genes and the significant list a few hundred
 gene_universe <- res_df$gene_id[!is.na(res_df$padj)]
 length(gene_universe)
 length(sig_ids)
 
-# The principle does not change with the size of the effect
-# State the universe you used and make it the genes you tested 
-# A reviewer will ask
+# The gene universe stays the same regardless of the thresholds used
+# It is simply the genes we tested
 
-### 7.2 Running the analysis
+### Run GO enrichment analysis
 
 # ont = "BP" restricts the search to biological processes
 # pAdjustMethod = "BH" is the same Benjamini-Hochberg correction
@@ -1151,37 +1088,29 @@ ego <- enrichGO(
   pAdjustMethod = "BH",
   pvalueCutoff = 0.05
 )
+
+# Checking top of our GO enrichment output
 head(as.data.frame(ego)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
 
 # Visualise top ten terms
-# The dot size shows how many genes are in each term
-# Colour shows adjusted p-value
 # A term with only three genes is rarely worth reporting
 dotplot(ego, showCategory = 15) +
-  labs(title = "Enriched biological processes: b vs a")
+  labs(title = "Enriched biological processes: B vs A")
 
 # Enrichment analysis described our gene list
-# It shows that our gene list is concentrated in particular annotated processes
-# ...more than a random list of the same size would be
-# That is a useful summary and a good starting point for a hypothesis
-# But its terms are highly redundant
+# This gives us a starting point for exploring the biology
+# but GO terms often overlap
+# It does not show causation, and can only identify processes that have been annotated
+# So we need to be careful not to overinterpret the results
 
-# It does NOT show causation
-# A process appearing in the list does not mean it drives the phenotype
-# It cannot find a process nobody has annotated
-# Poorly studied biology is invisible to this method, by construction
-
-# Treat the output as a summary to be interpreted, not a result to be reported uncritically
-
-### Challenge 3
-# Running the analysis on up-regulated genes only
+### Running the analysis on up-regulated genes only
 
 # Create our list
 up_ids <- res_df$gene_id[res_df$padj < 0.05 & res_df$log2FoldChange > 1]
+# Filter for only tested genes, genes in universe
 up_ids <- up_ids[!is.na(up_ids)]
 
 # Run analysis
-# Update the gene arg to point to up_ids
 ego_up <- enrichGO(
   gene = up_ids,
   universe = gene_universe,
@@ -1191,21 +1120,20 @@ ego_up <- enrichGO(
   pAdjustMethod = "BH",
   pvalueCutoff = 0.05
 )
+# Take a look
 head(as.data.frame(ego_up)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
 
 # Visualise top ten terms for upregulated genes
 dotplot(ego_up, showCategory = 15) +
   labs(title = "Enriched biological processes: B vs A in upregulated genes")
 
-# And now for down regulated genes
-# Create our list
+# And now for downregulated genes
 # Change the log2FoldChange to < -1
 # Splitting by direction is almost always more informative than one combined list
 down_ids <- res_df$gene_id[res_df$padj < 0.05 & res_df$log2FoldChange < -1]
 down_ids <- down_ids[!is.na(down_ids)]
 
-# Run analysis
-# Update the gene arg to point to down_ids
+# Run analysis for downregulated genes
 ego_down <- enrichGO(
   gene = down_ids,
   universe = gene_universe,
@@ -1215,9 +1143,10 @@ ego_down <- enrichGO(
   pAdjustMethod = "BH",
   pvalueCutoff = 0.05
 )
+# Take a look
 head(as.data.frame(ego_down)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
 
-# Visualise top ten terms for upregulated genes
+# Visualise top ten terms for downregulated genes
 dotplot(ego_down, showCategory = 15) +
   labs(title = "Enriched biological processes: B vs A in downregulated genes")
 
