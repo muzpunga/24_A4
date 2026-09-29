@@ -1203,6 +1203,8 @@ The assigned gene of interest, YDL022W (GPD1), was significantly differentially 
 
 **Enrichment (max 4 sentences):**
 
+(The up-regulated genes returned zero path-enrichment rows).
+
 **Volcano caption (2 sentences):**
 
 The most striking feature of the volcano plot is its asymmetry. More genes were down regulated in B (147) compared to up regulated in B (27). This means that relative to condition A, condition B is associated predominantly with *reduced* expression of many genes, while only a small number of genes show increased expression. YML123C is the most significant gene in the dataset, with a very large negative fold change (approximately −4.4 log2FC) and an extremely small adjusted p-value. Other genes exhibiting large effect sizes and very small p-values include YDR077W, YDR033W, YFR015C, YGR234W. Overall, the transcriptional response was dominated by gene repression in condition B.
