@@ -1105,12 +1105,19 @@ dotplot(ego, showCategory = 15) +
 
 ### Running the analysis on up-regulated genes only
 
-# Create our list
+# derive up regulated, significant gene, filter for only tested genes, genes in universe
 up_ids <- res_df$gene_id[res_df$padj < 0.05 & res_df$log2FoldChange > 1]
-# Filter for only tested genes, genes in universe
 up_ids <- up_ids[!is.na(up_ids)]
 
-# Run analysis
+# And now for downregulated genes, change the log2FoldChange to < -1
+# Splitting by direction is almost always more informative than one combined list
+down_ids <- res_df$gene_id[res_df$padj < 0.05 & res_df$log2FoldChange < -1]
+down_ids <- down_ids[!is.na(down_ids)]
+
+# non significant genes
+neither_ids <- res_df$gene_id[!(res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1)]
+
+# Run analysis for up regulated
 ego_up <- enrichGO(
   gene = up_ids,
   universe = gene_universe,
@@ -1118,20 +1125,7 @@ ego_up <- enrichGO(
   keyType = "ORF",
   ont = "BP",
   pAdjustMethod = "BH",
-  pvalueCutoff = 0.05
-)
-# Take a look
-head(as.data.frame(ego_up)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
-
-# Visualise top ten terms for upregulated genes
-dotplot(ego_up, showCategory = 15) +
-  labs(title = "Enriched biological processes: B vs A in upregulated genes")
-
-# And now for downregulated genes
-# Change the log2FoldChange to < -1
-# Splitting by direction is almost always more informative than one combined list
-down_ids <- res_df$gene_id[res_df$padj < 0.05 & res_df$log2FoldChange < -1]
-down_ids <- down_ids[!is.na(down_ids)]
+  pvalueCutoff = 0.05)
 
 # Run analysis for downregulated genes
 ego_down <- enrichGO(
@@ -1141,15 +1135,38 @@ ego_down <- enrichGO(
   keyType = "ORF",
   ont = "BP",
   pAdjustMethod = "BH",
-  pvalueCutoff = 0.05
-)
+  pvalueCutoff = 0.05)
+
+# used only to test the enrichment processes is working correctly
+neither_enrich <- enrichGO(
+  gene = neither_ids,
+  universe = gene_universe,
+  OrgDb = org.Sc.sgd.db,
+  keyType = "ORF",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05)
+
+paste0("There were ", nrow(as.data.frame(ego_up)), " records returned by enrichGO for up regulated genes.")
+paste0("There were ", nrow(as.data.frame(ego_down)), " records returned by enrichGO for down regulated genes.")  
+paste0("There were ", nrow(as.data.frame(neither_enrich)), " records returned by enrichGO for non significant & low fold genes. This was performed as a sanity check for the zero up regulated gene enrichment.")
+
 # Take a look
-head(as.data.frame(ego_down)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
+#head(as.data.frame(ego_up)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
+
+# Visualise top ten terms for upregulated genes
+#dotplot(ego_up, showCategory = 15) +
+#  labs(title = "Enriched biological processes: B vs A in upregulated genes")
+
+
+
+
+# Take a look
+#head(as.data.frame(ego_down)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
 
 # Visualise top ten terms for downregulated genes
 dotplot(ego_down, showCategory = 15) +
   labs(title = "Enriched biological processes: B vs A in downregulated genes")
-
 ```
 
 # 7. Your gene of interest
