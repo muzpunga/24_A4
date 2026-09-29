@@ -51,4 +51,8 @@ docs/
 po/*~
 
 # RStudio Connect folder
+<<<<<<< HEAD
 rsconnect/
+=======
+rsconnect/
+>>>>>>> 1a25216 (Ignore generated R Markdown outputs)
