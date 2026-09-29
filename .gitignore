@@ -1,5 +1,7 @@
 *.html
-figures/
+figures/*
+
+24_A4.Rproj
 
 # History files
 .Rhistory
