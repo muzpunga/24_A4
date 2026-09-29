@@ -41,6 +41,8 @@ gene of interest ``r params$gene_of_interest``.
 
 # 1. Count matrix and metadata
 
+This section constructs the RNA-seq count matrix and sample metadata required for downstream analysis. The six assigned HTSeq-count files are read, merged into a single gene-by-sample matrix, and checked to ensure that sample names and metadata are correctly aligned. HTSeq summary rows are separated from gene counts, library sizes and read-assignment statistics are calculated for quality control, and visualisations of sequencing depth, read assignment rates, and count distributions are generated to assess sample quality before normalisation and differential expression analysis.
+
 ```{r matrix}
 ####################################
 # Build the count matrix
@@ -415,13 +417,7 @@ ls()
 
 # 2. Normalisation and PCA
 
-To correct for sequencing depth, we divide each count by the sample's library size, before multiplying by one million. 
-
-This is to make our counts more readable. 
-
-Scaling like this, however, does not correct for gene length. For this reason, counts per million values cannot be compared between different genes. 
-
-When we are looking to do differential expression, scaling our counts per million can be useful to compare the *same* gene across samples. 
+This section prepares the count data for downstream analysis by removing unexpressed and low-count genes, normalising counts to counts-per-million (CPM), and applying a log₂ transformation to stabilise the variance. Principal component analysis (PCA) is then performed on the normalised expression data to identify the major sources of variation between samples, quantify the proportion of variance explained by each component, and assess whether samples cluster according to experimental condition. The resulting PCA plot provides an overview of global expression patterns and serves as an important quality-control check before differential expression analysis.
 
 ```{r pca}
 ####################################
@@ -694,7 +690,11 @@ We can see that PC1 has separated our conditions and explains a large share of t
 ^ I think that sounds great. My understanding is that when PCA shows clear seperation, then we can expect differently expressed genes.
 I feel magnitude and direction can't be commented on until the DEA, but it's clear something is going on.
 
+^Yes, I agree. The commentary should stick to the unit material.
+
 # 3. Differential expression
+
+This section performs differential expression analysis using DESeq2 to identify genes whose expression differs between conditions A and B. Raw count data are modelled using a negative binomial framework, accounting for differences in sequencing depth through size-factor normalisation and estimating gene-specific dispersion to quantify biological variability. Differential expression statistics are then calculated for the contrast of condition B versus condition A, and log₂ fold changes are shrunk using the apeglm method to obtain more stable effect-size estimates. Diagnostic plots, including dispersion estimates, p-value distributions, and MA plots, are used to assess model performance and the effect of fold-change shrinkage.
 
 ```{r deseq2}
 # let's check that the count and metadata are correctly aligned
@@ -920,10 +920,7 @@ ggsave(
 
 # 5. Volcano plot and heatmap
 
-A volcano plot shows effect size on the x-axis and statistical significance on the y-axis. Genes that are both strongly changed and confidently detected sit in the top corners, which is where the name comes from.
-
-Significance is plotted as the negative log of the adjusted p-value, so that small p-values become large numbers. A padj of 0.1 becomes 1. A padj of 0.01 becomes 2. A padj of 0.0001 becomes 4. Smaller p-values climb higher up the y-axis, which is exactly the direction a reader expects.
-
+This section identifies significant differentially expressed genes and visualises the results using a volcano plot and heatmap. Genes are classified as up-regulated in condition B, down-regulated in condition B, or not significant using thresholds of adjusted p-value < 0.05 and absolute log₂ fold change > 1. A volcano plot is generated to display both statistical significance and effect size, while a heatmap of significant genes is used to assess expression patterns, sample clustering, and consistency among biological replicates.
 
 ```{r figures}
 res_df$neg_log10_padj <- -log10(res_df$padj)
@@ -1011,6 +1008,8 @@ pheatmap(
 ```
 
 # 6. Annotation and GO enrichment
+
+This section annotates differentially expressed genes using the yeast annotation database and performs Gene Ontology (GO) over-representation analysis to identify biological processes associated with the transcriptional response. Significant genes are mapped from systematic ORF identifiers to common gene names and functional descriptions, then compared against the tested gene universe using GO Biological Process enrichment analysis. Enrichment is assessed for all significant genes combined and separately for genes up-regulated and down-regulated in condition B. The results provide biological context for the differential expression analysis by identifying cellular processes that are disproportionately represented among the affected genes.
 
 ```{r enrichment}
 ##################################
@@ -1170,6 +1169,8 @@ dotplot(ego_down, showCategory = 15) +
 ```
 
 # 7. Your gene of interest
+
+This section extracts and interprets the assigned gene of interest from the differential expression results. The gene's shrunken log₂ fold change, adjusted p-value, and significance classification are retrieved from the annotated DESeq2 results table. Gene Ontology annotations are then queried to identify biological processes associated with the gene, providing functional context for interpreting its expression changes between conditions A and B.
 
 ```{r goi}
 params$gene_of_interest
