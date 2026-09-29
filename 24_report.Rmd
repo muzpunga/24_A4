@@ -1155,12 +1155,32 @@ dotplot(ego_down, showCategory = 15) +
 # 7. Your gene of interest
 
 ```{r goi}
+params$gene_of_interest
+# "YDL022W"
 
+goi_row <- res_df[res_df$gene_id == params$gene_of_interest,]
+goi_row
+
+goi_lfc <- goi_row$log2FoldChange
+goi_padj <- goi_row$padj
+goi_status <- goi_row$status
+
+goi_go <- AnnotationDbi::select(
+  org.Sc.sgd.db,
+  keys = params$gene_of_interest,
+  keytype = "ORF",
+  columns = c("GO", "ONTOLOGY")
+)
+
+goi_bp <- subset(goi_go, ONTOLOGY == "BP")
+head(goi_bp)
 ```
 
 # 8. Interpretation
 
 **Gene of interest (max 4 sentences):**
+
+The assigned gene of interest, YDL022W (GPD1), was significantly differentially expressed between the two conditions, with a shrunken log₂ fold change of -1.28, indicating lower expression in condition B relative to condition A. The result was highly significant (adjusted p-value = 1.79 × 10⁻¹³) and was therefore classified as Down in B. GPD1 encodes an NAD-dependent glycerol-3-phosphate dehydrogenase involved in glycerol biosynthesis and cellular responses to osmotic stress. These results indicate reduced expression of GPD1 in condition B and are consistent with differences in osmotic stress-related and glycerol biosynthetic processes between the two conditions.
 
 **PCA (max 3 sentences):**
 
