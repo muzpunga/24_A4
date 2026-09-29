@@ -1201,13 +1201,15 @@ The assigned gene of interest, YDL022W (GPD1), was significantly differentially 
 
 **PCA (max 3 sentences):**
 
+Principal component analysis (PCA) showed that samples clustered primarily according to experimental condition, indicating that condition A and condition B have distinct global gene expression profiles. Replicates from the same condition clustered closely together, suggesting good reproducibility and relatively low within-group variation. The clear separation between conditions supports the use of differential expression analysis to identify genes associated with the treatment effect.
+
 **Enrichment (max 4 sentences):**
 
-(The up-regulated genes returned zero path-enrichment rows).
+Gene Ontology over-representation analysis identified several enriched biological processes among genes that were down-regulated in condition B. The strongest enriched terms included oxoacid metabolic process, organic acid metabolic process, and cell wall organization or biogenesis, suggesting widespread changes to cellular metabolism and cell wall-related functions. Additional enriched terms were associated with purine nucleotide metabolism and carbohydrate transport, including hexose and fructose transmembrane transport. In contrast, no Biological Process terms were significantly enriched among genes up-regulated in condition B, indicating that the transcriptional response was dominated by coordinated repression of specific biological pathways rather than activation of a single strongly enriched process.
 
 **Volcano caption (2 sentences):**
 
-The most striking feature of the volcano plot is its asymmetry. More genes were down regulated in B (147) compared to up regulated in B (27). This means that relative to condition A, condition B is associated predominantly with *reduced* expression of many genes, while only a small number of genes show increased expression. YML123C is the most significant gene in the dataset, with a very large negative fold change (approximately −4.4 log2FC) and an extremely small adjusted p-value. Other genes exhibiting large effect sizes and very small p-values include YDR077W, YDR033W, YFR015C, YGR234W. Overall, the transcriptional response was dominated by gene repression in condition B.
+The most striking feature of the volcano plot is its asymmetry - more genes were down regulated in B (n=147) compared to up regulated in B (n=27). This means that relative to condition A, condition B is associated predominantly with *reduced* expression of many genes, while only a small number of genes show increased expression.
 
 # 9. Session information
 
