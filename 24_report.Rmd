@@ -1049,10 +1049,19 @@ pheatmap(
   scale = "row",
   show_rownames = FALSE,
   annotation_col = annotation_col,
+  main = "Differentially expressed genes: B versus A"
+)
+# We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
+
+# Running again to save to our figures folder
+pheatmap(
+  heat_matrix,
+  scale = "row",
+  show_rownames = FALSE,
+  annotation_col = annotation_col,
   main = "Differentially expressed genes: B versus A",
   filename = "figures/heatmap.png"
 )
-# We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
 
 ```
 
