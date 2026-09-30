@@ -20,6 +20,9 @@ params:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
                       fig.width = 7, fig.height = 6)
 set.seed(777)
+
+# MP/IC
+
 # Load the packages you need. Record versions with sessionInfo() at the end.
 library(clusterProfiler)
 library(DESeq2)
@@ -1308,5 +1311,6 @@ Interpretation by Murray Chandler Pung and Ivy Craw.
 # 9. Session information
 
 ```{r session}
+# MP
 sessionInfo()
 ```
