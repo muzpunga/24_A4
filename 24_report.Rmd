@@ -688,7 +688,7 @@ ggsave(
 
 ```
 
-The PCA of normalised expression data showed clear separation of conditions A and B along PC1, which explained 53.7% of the total variance. All samples clustered according to their experimental condition, suggesting that condition is the primary source of variation in the dataset rather than differences in sequencing depth. Sample_026 exhibited substantial variation along PC2 (19.5% of variance) relative to the other A replicates, indicating additional within-group variability. However, sample_026 remained grouped with condition A on PC1 and did not cluster with the B samples, suggesting that it represents biological or technical variation within condition A rather than a failure of condition separation.
+The PCA of normalised expression data showed clear separation of conditions A and B along PC1, which explained 53.7% of the total variance. All samples clustered according to their experimental condition along PC1, suggesting that condition is the primary source of variation in the dataset rather than differences in sequencing depth. Sample_026 exhibited substantial variation along PC2 (19.5% of variance) relative to the other A replicates, indicating additional within-group variability. However, sample_026 remained grouped with condition A on PC1 and did not cluster with the B samples, suggesting that it represents biological or technical variation within condition A rather than a failure of condition separation.
 
 # 3. Differential expression
 
