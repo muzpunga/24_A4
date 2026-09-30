@@ -386,18 +386,15 @@ ggplot(qc_table, aes(x = sample_id, y = library_size / 1e6, fill = condition)) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# We can observe that condition B has more reads assigned to genes
-# It could flag a potential issue, it may suggest corruption of data
-# It may indicate a batch effect occurring or other issue
+# Condition B samples had larger library sizes than condition A samples, consistent with higher sequencing depth 
+# Although this difference could introduce technical bias in raw counts
+# normalisation was applied (presented in the PCA & Normalisation section below) to account for variation in library size
+# and all samples showed comparable read assignment rates (74.5-78.7%)
 
 # Ideally we'd bring attention upstream, biologist or project manager who performed the sequencing
 # They may say no batch effects, and it was due to reason x or otherwise
-# If Condition A samples belong to a single batch, and Condition B samples from a different batch 
-# then finding significance between the condition could just mean that batch effects are significant
 
-# If there is a batch effect and it is correlated with condition
-# then the experiment cannot be saved because we cannot adjust the model for batch effects
-# Condition B samples had larger library sizes than condition A samples, indicating higher sequencing depth. Although this difference could introduce technical bias in raw counts, normalization was applied (presented in the PCA & Normalisation section below) to account for variation in library size, and all samples showed comparable read assignment rates (74.5-78.7%). No obvious outlier samples were identified based on sequencing depth alone.
+# No obvious outlier samples were identified based on sequencing depth alone
 
 ### Plot percent_assigned for each sample as a bar chart, coloured by condition, with a sensible title and axis labels
 ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
@@ -415,6 +412,9 @@ ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
 # This could warrant further QC investigation upstream
 # to rule out any potential batch effect or technical issues
 # or provide legitimate technical or biological explanation 
+
+# However, for the sake of the assignment
+# it is assumed the variance alone is not an issue, unless further analysis suggests otherwise
 
 # Condition B also has larger assigned libraries
 # Its slightly higher assignment rates suggest that poorer assignment
@@ -467,29 +467,19 @@ count_summary <- count_summary[
 # Show summary table
 count_summary
 
-```
+# The means are considerably higher than the medians
+# reflecting a skewed distribution with a smaller number of highly expressed genes as we saw in the boxplot
+# Raw count data are generally skewed which is why we normalise below
 
-The means are considerably higher than the medians, reflecting a skewed distribution with a smaller number of highly expressed genes as we saw in the boxplot. These are raw counts, however, so differences between our conditions can reflect library size rather than biological expression.
+```
 
 In a real-world study, we would investigate the differences in library sizes, proportions of genes assigned, and high no-feature reads with the biologist or sequencing team to determine whether they reflect sequencing depth, batch effects or another technical factor. 
 
-If all condition A samples belonged to one batch and all condition B samples to another, batch and condition would be perfectly confounded. 
-
-Any significant differences between conditions could reflect batch effects rather than biology, and we would not be able to adjust the model to separate the two.
-
-
 # 2. Normalisation and PCA
 
-To help correct for these differences in library size/sequencing depth, we divide each count by the sample's library size, before multiplying by one million. 
+This section prepares the count data for downstream analysis by removing unexpressed and low-count genes, normalising counts to counts-per-million (CPM), and applying a log₂ transformation to stabilise the variance. Principal component analysis (PCA) is then performed on the normalised expression data (CPM) to identify the major sources of variation between samples, quantify the proportion of variance explained by each component, and assess whether samples cluster according to experimental condition. The resulting PCA plot provides an overview of global expression patterns and serves as an important quality-control check before differential expression analysis.
 
-This is to make our counts more readable; we use CPM for visualisation and to perform our Principle Components Analysis.
-
-Scaling our counts per million can be useful to compare the *same* gene across samples. 
-
-It does not, however, correct for gene length. For this reason, counts per million values cannot be compared between different genes. 
-
-For differential expression testing, DESeq2 uses the filtered raw counts and performs its own normalisation.
-This section prepares the count data for downstream analysis by removing unexpressed and low-count genes, normalising counts to counts-per-million (CPM), and applying a log₂ transformation to stabilise the variance. Principal component analysis (PCA) is then performed on the normalised expression data to identify the major sources of variation between samples, quantify the proportion of variance explained by each component, and assess whether samples cluster according to experimental condition. The resulting PCA plot provides an overview of global expression patterns and serves as an important quality-control check before differential expression analysis.
+Note, scaling our counts per million can be useful to visualise and compare the *same* gene across samples. It does not, however, correct for gene length. For this reason, counts per million values cannot be compared between different genes. For differential expression testing, DESeq2 uses the filtered raw counts and performs its own normalisation.
 
 ```{r pca}
 ####################################
@@ -608,13 +598,11 @@ boxplot(
   ylab = "log2(CPM + 1)",
   main = "After normalisation"
 )
-# The normalisation appears to have worked - the differences caused by unequal sequencing depth no longer seem to dominate the data after normalization.
+# The normalisation appears to have worked - the differences caused by unequal sequencing depth no longer seem to dominate the data after normalisation
 
-
-# Looks like the differences have reduced appropriately after normalisation
 # Enough for us to compare gene expression
 # Not expected to align perfectly
-# as genuine biological variation should remain
+# as genuine biological variation should remain as our unit chair has suggested
 
 ##################################
 # Principal component analysis ###
@@ -643,6 +631,7 @@ boxplot(
 pca <- prcomp(t(log_cpm))
 
 # We should have the same number of PCA components as we do samples
+# The sample coordinates live in pca$x
 dim(pca$x)
 # Check that our row names have been switched to samples
 rownames(pca$x)
@@ -652,16 +641,6 @@ stopifnot(
   nrow(pca$x) == ncol(log_cpm),
   all(rownames(pca$x) == colnames(log_cpm))
 )
-
-# The sample coordinates live in pca$x
-
-# Thousands of gene-expression measurements per sample → PCA 
-# → a few summary dimensions (PC1, PC2, etc.) describing the major differences between samples
-
-# PC1 → captures the most variation
-# PC2 → captures the second most
-# PC3 → captures the third most
-# PC4 → captures the fourth most
 
 # Create a data frame containing each sample's coordinates
 # on PC1 and PC2 (the two components explaining the most variation)
@@ -675,10 +654,11 @@ pca_df <- data.frame(
 pca_df <- merge(pca_df, sample_metadata, by = "sample_id")
 pca_df
 
-# ...note, a biologically important treatment effect can still be relatively small
+# ...note, a biologically important condition effect can still be relatively small
 # and therefore not obvious in those first two PCs
 
-# Look at how much percent variation each component captures
+# So we'll look at the percentage of variance each component captures
+
 # prcomp() stores a standard deviation for each component in pca$sdev
 # Variance is the square of standard deviation, so ^2
 # Dividing each variance by the total gives each component's share
@@ -690,6 +670,7 @@ percent_var <- round(
 
 # Inspect variation explained by the first four (highest-ranked) PCs
 percent_var[1:4]
+# We can see that the first four PCs collectively account for 92.7% of the variance
 
 ### Building the PCA figure with ggplot2
 
@@ -977,14 +958,6 @@ top_three_sig_genes <- ggplot(top_three_counts,
 # Draw object
 top_three_sig_genes
 
-# OPTIONAL saving
-ggsave(
-  filename = "figures/top_three_sig_genes.png",
-  plot = top_three_sig_genes,
-  width = 6,
-  height = 5,
-  dpi = 300
-)
 ```
 
 # 5. Volcano plot and heatmap
@@ -1049,7 +1022,6 @@ p_volcano <- ggplot(
 p_volcano
 
 
-
 # Heatmap
 # Heatmaps answer - do the replicates within a group behave alike, and do the two groups (~condition) look different?
 # We plot only the significant genes, because plotting several thousand rows would show nothing but noise.
@@ -1078,7 +1050,7 @@ pheatmap(
 
 # 6. Annotation and GO enrichment
 
-This section annotates differentially expressed genes using the yeast annotation database and performs Gene Ontology (GO) over-representation analysis to identify biological processes associated with the transcriptional response. Significant genes are mapped from systematic ORF identifiers to common gene names and functional descriptions, then compared against the tested gene universe using GO Biological Process enrichment analysis. Enrichment is assessed for all significant genes combined and separately for genes up-regulated and down-regulated in condition B. The results provide biological context for the differential expression analysis by identifying cellular processes that are disproportionately represented among the affected genes.
+This section annotates differentially expressed genes using the annotation database and performs Gene Ontology (GO) over-representation analysis to identify biological processes associated with the transcriptional response. Systematic identifiers (ORF) are mapped to common gene names and functional descriptions, then significant genes are compared against the tested gene universe using GO Biological Process enrichment analysis. Enrichment is assessed for all significant genes combined and separately for genes up-regulated and down-regulated in condition B. The results provide biological context for the differential expression analysis by identifying cellular processes that are disproportionately represented among the affected genes.
 
 ```{r enrichment}
 ##################################
@@ -1089,8 +1061,9 @@ This section annotates differentially expressed genes using the yeast annotation
 # I.e., FMP16 vs YDR070C
 
 # the mapIds() function looks up one identifier type and returns another
+# The assessment specifies org.Sc.sgd.db
+# unit material uses ORF identifiers for keytype and matches the identifier type used by org.Sc.sgd.db
 # keys are our gene IDs
-# keytype will be ORF for yeast systematic names
 # we want the common names returned by column
 # multiVals = "first" handles the genes that map to more than one name by taking the first
 res_df$gene_name <- mapIds(
@@ -1102,9 +1075,9 @@ res_df$gene_name <- mapIds(
 )
 
 # Add a description
-# some genes will return NA
-# many yeast open reading frames simply have no common name
-# this is a fact about yeast rather than a code error
+
+# Not every systematic identifier has an associated common name
+# This does not necessarily indicate a code error
 # keep the systematic identifier as the primary key
 # common names change over time whereas systematic do not
 res_df$description <- mapIds(
@@ -1123,11 +1096,23 @@ head(res_df[order(res_df$padj), c("gene_id", "gene_name", "log2FoldChange","desc
 ### Functional enrichment ####
 ##############################
 
-# GO enrichment compares our significant genes with a background list
+# Gene ontology enrichment compares our significant genes with a background list
 # this is known as the gene universe
-# This should include genes that had the opportunity to be identified
+# It should include genes that had the opportunity to be identified
 # (not filtered as NA in DESeq2)
 # So the universe is every gene we tested, not every gene in the genome
+
+# We compare our significant gene list to this background list of tested genes
+# to identify over-represented Biological Process terms
+
+# A low adjusted p-value suggests that a particular annotated gene set term
+# is significantly over-represented in our gene list
+
+# Enrichment only reflects processes that have already been annotated
+# so a null result does not mean there is no shared biology
+# it means no annotated Biological Process term was significantly over-represented
+
+# GO terms can overlap, so we need to be careful not to overinterpret the results
 
 # Compare the lengths of the gene universe versus sig_ids
 # The universe should be thousands of genes and the significant list a few hundred
@@ -1143,7 +1128,7 @@ length(sig_ids)
 # ont = "BP" restricts the search to biological processes
 # pAdjustMethod = "BH" is the same Benjamini-Hochberg correction
 # ...because we are testing many hypotheses at once, one per GO term
-# GeneRatio is the fraction of your significant genes in that process
+# GeneRatio is the fraction of our significant genes in that process
 # BgRatio is the fraction of the universe in that process
 # A term is enriched when the first is much larger than the second
 
@@ -1182,8 +1167,11 @@ up_ids <- up_ids[!is.na(up_ids)]
 down_ids <- res_df$gene_id[res_df$padj < 0.05 & res_df$log2FoldChange < -1]
 down_ids <- down_ids[!is.na(down_ids)]
 
-# non significant genes
-neither_ids <- res_df$gene_id[!(res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1)]
+# Non-significant or low-fold-change genes among genes that were tested
+neither_ids <- res_df$gene_id[
+  !is.na(res_df$padj) &
+  !(res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1)
+]
 
 # Run analysis for up regulated
 ego_up <- enrichGO(
@@ -1268,11 +1256,11 @@ The assigned gene of interest, YDL022W (GPD1), was significantly differentially 
 
 **PCA (max 3 sentences):**
 
-Principal component analysis (PCA) showed that samples clustered primarily according to experimental condition, indicating that condition A and condition B have distinct global gene expression profiles. Sample_026 showed additional variation along PC2 relative to the other A replicates but is grouped with condition A in PC1, indicating within-group variability rather than loss of condition separation. The clear separation between conditions supports the use of differential expression analysis to identify genes associated with the treatment effect.
+Principal component analysis (PCA) showed that samples clustered primarily according to experimental condition, indicating that condition A and condition B have distinct global gene expression profiles. PC1 explained 53.7% of the variance and separated condition A from condition B, while PC2 explained a further 19.5%; together, the first two components captured 73.2% of the total variance, and the first four captured 92.7%. Sample_026 showed additional variation along PC2 relative to the other A replicates but remained grouped with condition A in PC1, indicating within-group variability rather than loss of condition separation, while the clear separation between conditions supports further differential expression analysis to identify genes associated with differences between the two conditions.
 
 **Enrichment (max 4 sentences):**
 
-Gene Ontology over-representation analysis identified several enriched biological processes among genes that were down-regulated in condition B. The strongest enriched terms included oxoacid metabolic process, organic acid metabolic process, and cell wall organization or biogenesis, suggesting widespread changes to cellular metabolism and cell wall-related functions. Additional enriched terms were associated with purine nucleotide metabolism and carbohydrate transport, including hexose and fructose transmembrane transport. In contrast, no Biological Process terms were significantly enriched among genes up-regulated in condition B, indicating that the transcriptional response was dominated by coordinated repression of specific biological pathways rather than activation of a single strongly enriched process.
+Gene Ontology over-representation analysis identified several enriched biological processes among genes that were down-regulated in condition B. The strongest enriched terms included oxoacid metabolic process, organic acid metabolic process, and cell wall organization or biogenesis, suggesting widespread changes to cellular metabolism and cell wall-related functions. Additional enriched terms were associated with purine nucleotide metabolism and carbohydrate transport, including hexose and fructose transmembrane transport. In contrast, `enrichGO()` returned no significantly enriched Biological Process terms for genes up-regulated in condition B, indicating that the stronger enrichment signal was confined to the down-regulated gene set, while no annotated process was significantly over-represented among up-regulated genes.
 
 **Volcano caption (2 sentences):**
 
