@@ -44,6 +44,8 @@ gene of interest ``r params$gene_of_interest``.
 This section constructs the RNA-seq count matrix and sample metadata required for downstream analysis. The six assigned HTSeq-count files are read, merged into a single gene-by-sample matrix, and checked to ensure that sample names and metadata are correctly aligned. HTSeq summary rows are separated from gene counts, library sizes and read-assignment statistics are calculated for quality control, and visualisations of sequencing depth, read assignment rates, and count distributions are generated to assess sample quality before normalisation and differential expression analysis.
 
 ```{r matrix}
+# IC/MP
+
 ####################################
 # Build the count matrix
 ####################################
@@ -120,11 +122,8 @@ condition_B_files <- c(
   "sample_032_counts.txt"
 )
 
-# Define the file path for our files
-# This is the only time we are using an absolute path
-# This was called for in the assessment instructions
-#counts_dir <- "/home/shared/SLE777/A4_counts"
-counts_dir <- "counts"
+# I've updated to use the param here to unpack in clean dir and knit there
+counts_dir <- params$counts_dir
 
 # Create vectors to save the files and their paths
 count_files <- c(condition_A_files, condition_B_files)
@@ -482,6 +481,8 @@ This section prepares the count data for downstream analysis by removing unexpre
 Note, scaling our counts per million can be useful to visualise and compare the *same* gene across samples. It does not, however, correct for gene length. For this reason, counts per million values cannot be compared between different genes. For differential expression testing, DESeq2 uses the filtered raw counts and performs its own normalisation.
 
 ```{r pca}
+# IC/MP
+
 ####################################
 # Filtering genes with no expression
 ####################################
@@ -743,6 +744,8 @@ The PCA of normalised expression data showed clear separation of conditions A an
 This section performs differential expression analysis using DESeq2 to identify genes whose expression differs between conditions A and B. Raw count data are modelled using a negative binomial framework, accounting for differences in sequencing depth through size-factor normalisation and estimating gene-specific dispersion to quantify biological variability. Differential expression statistics are then calculated for the contrast of condition B versus condition A, and log₂ fold changes are shrunk using the apeglm method to obtain more stable effect-size estimates. Diagnostic plots, including dispersion estimates, p-value distributions, and MA plots, are used to assess model performance and the effect of fold-change shrinkage.
 
 ```{r deseq2}
+# MP/IC
+
 # let's check that the count and metadata are correctly aligned
 dim(counts_filtered)
 head(counts_filtered)
@@ -841,6 +844,8 @@ We rely on the following data objects returned by the DESeq2 analysis performed 
 - The correct coefficient used in lfcShrink() — it should come from resultsNames(dds) explicitly. 
 
 ```{r significant}
+# IC/MP
+
 ###################################
 # Identifying significant genes ###
 ###################################
@@ -965,6 +970,7 @@ top_three_sig_genes
 This section identifies significant differentially expressed genes and visualises the results using a volcano plot and heatmap. Genes are classified as up-regulated in condition B, down-regulated in condition B, or not significant using thresholds of adjusted p-value < 0.05 and absolute log₂ fold change > 1. A volcano plot is generated to display both statistical significance and effect size, while a heatmap of significant genes is used to assess expression patterns, sample clustering, and consistency among biological replicates.
 
 ```{r figures}
+# MP/IC
 res_df$neg_log10_padj <- -log10(res_df$padj)
 head(res_df[, c("gene_id", "log2FoldChange", "padj", "neg_log10_padj")])
 
@@ -1021,6 +1027,14 @@ p_volcano <- ggplot(
 
 p_volcano
 
+# save to figures folder
+ggsave(
+  filename = "figures/volcano_plot.png",
+  plot = p_volcano,
+  width = 7,
+  height = 6,
+  dpi = 300
+)
 
 # Heatmap
 # Heatmaps answer - do the replicates within a group behave alike, and do the two groups (~condition) look different?
@@ -1044,8 +1058,21 @@ pheatmap(
   scale = "row",
   show_rownames = FALSE,
   annotation_col = annotation_col,
-  main = "Differentially expressed genes: B versus A")
+  main = "Differentially expressed genes: B versus A"
+)
 # We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
+
+# Running again to save to our figures folder
+# Seperate code chunk in case saving means it won't render in knitted HTML
+pheatmap(
+  heat_matrix,
+  scale = "row",
+  show_rownames = FALSE,
+  annotation_col = annotation_col,
+  main = "Differentially expressed genes: B versus A",
+  filename = "figures/heatmap.png"
+)
+
 ```
 
 # 6. Annotation and GO enrichment
@@ -1053,6 +1080,8 @@ pheatmap(
 This section annotates differentially expressed genes using the annotation database and performs Gene Ontology (GO) over-representation analysis to identify biological processes associated with the transcriptional response. Systematic identifiers (ORF) are mapped to common gene names and functional descriptions, then significant genes are compared against the tested gene universe using GO Biological Process enrichment analysis. Enrichment is assessed for all significant genes combined and separately for genes up-regulated and down-regulated in condition B. The results provide biological context for the differential expression analysis by identifying cellular processes that are disproportionately represented among the affected genes.
 
 ```{r enrichment}
+# IC/MP
+
 ##################################
 ### Annotating the gene names ####
 ##################################
@@ -1227,6 +1256,8 @@ dotplot(ego_down, showCategory = 15) +
 This section extracts and interprets the assigned gene of interest from the differential expression results. The gene's shrunken log₂ fold change, adjusted p-value, and significance classification are retrieved from the annotated DESeq2 results table. Gene Ontology annotations are then queried to identify biological processes associated with the gene, providing functional context for interpreting its expression changes between conditions A and B.
 
 ```{r goi}
+# MP
+
 params$gene_of_interest
 # "YDL022W"
 
@@ -1254,17 +1285,25 @@ head(goi_bp)
 
 The assigned gene of interest, YDL022W (GPD1), was significantly differentially expressed between the two conditions, with a shrunken log₂ fold change of -1.28, indicating lower expression in condition B relative to condition A. The result was highly significant (adjusted p-value = 1.79 × 10⁻¹³) and was therefore classified as Down in B. GPD1 encodes an NAD-dependent glycerol-3-phosphate dehydrogenase involved in glycerol biosynthesis and cellular responses to osmotic stress. These results indicate reduced expression of GPD1 in condition B and are consistent with differences in osmotic stress-related and glycerol biosynthetic processes between the two conditions.
 
+Interpretation by Murray Chandler Pung. 
+
 **PCA (max 3 sentences):**
 
 Principal component analysis (PCA) showed that samples clustered primarily according to experimental condition, indicating that condition A and condition B have distinct global gene expression profiles. PC1 explained 53.7% of the variance and separated condition A from condition B, while PC2 explained a further 19.5%; together, the first two components captured 73.2% of the total variance, and the first four captured 92.7%. Sample_026 showed additional variation along PC2 relative to the other A replicates but remained grouped with condition A in PC1, indicating within-group variability rather than loss of condition separation, while the clear separation between conditions supports further differential expression analysis to identify genes associated with differences between the two conditions.
+
+Interpretation by Murray Chandler Pung and Ivy Craw.  
 
 **Enrichment (max 4 sentences):**
 
 Gene Ontology over-representation analysis identified several enriched biological processes among genes that were down-regulated in condition B. The strongest enriched terms included oxoacid metabolic process, organic acid metabolic process, and cell wall organization or biogenesis, suggesting widespread changes to cellular metabolism and cell wall-related functions. Additional enriched terms were associated with purine nucleotide metabolism and carbohydrate transport, including hexose and fructose transmembrane transport. In contrast, `enrichGO()` returned no significantly enriched Biological Process terms for genes up-regulated in condition B, indicating that the stronger enrichment signal was confined to the down-regulated gene set, while no annotated process was significantly over-represented among up-regulated genes.
 
+Interpretation by Murray Chandler Pung and Ivy Craw.  
+
 **Volcano caption (2 sentences):**
 
-The most striking feature of the volcano plot is its asymmetry - more genes were down regulated in B (n=147) compared to up regulated in B (n=27). This means that relative to condition A, condition B is associated predominantly with *reduced* expression of many genes, while only a small number of genes show increased expression.
+The most striking feature of the volcano plot comparing condition B with condition A is its asymmetry, with n = `r nrow(down_in_b)` genes down-regulated in B compared with n = `r nrow(up_in_b)` genes up-regulated in B; positive log₂ fold changes indicate higher expression in condition B. This means that relative to condition A, condition B is associated predominantly with *reduced* expression of many genes, while only a smaller number show increased expression; the dashed vertical lines mark the log₂ fold-change thresholds of -1 and 1, and the dashed horizontal line marks the adjusted p-value threshold of 0.05.
+
+Interpretation by Murray Chandler Pung and Ivy Craw.
 
 # 9. Session information
 
