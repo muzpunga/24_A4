@@ -1001,7 +1001,7 @@ pheatmap(
   scale = "row",
   show_rownames = FALSE,
   annotation_col = annotation_col,
-  main = "Differentially expressed genes: thin vs early")
+  main = "Differentially expressed genes: B versus A")
 # We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
 ```
 
@@ -1200,7 +1200,7 @@ The assigned gene of interest, YDL022W (GPD1), was significantly differentially 
 
 **PCA (max 3 sentences):**
 
-Principal component analysis (PCA) showed that samples clustered primarily according to experimental condition, indicating that condition A and condition B have distinct global gene expression profiles. Replicates from the same condition clustered closely together, suggesting good reproducibility and relatively low within-group variation. The clear separation between conditions supports the use of differential expression analysis to identify genes associated with the treatment effect.
+Principal component analysis (PCA) showed that samples clustered primarily according to experimental condition, indicating that condition A and condition B have distinct global gene expression profiles. Sample_026 showed additional variation along PC2 relative to the other A replicates but is grouped with condition A in PC1, indicating within-group variability rather than loss of condition separation. The clear separation between conditions supports the use of differential expression analysis to identify genes associated with the treatment effect.
 
 **Enrichment (max 4 sentences):**
 
