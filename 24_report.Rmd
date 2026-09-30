@@ -380,6 +380,8 @@ ggplot(qc_table, aes(x = sample_id, y = library_size / 1e6, fill = condition)) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+# Condition B samples had larger library sizes than condition A samples, indicating higher sequencing depth. Although this difference could introduce technical bias in raw counts, normalization was applied (presented in the PCA & Normalisation section below) to account for variation in library size, and all samples showed comparable read assignment rates (74.5-78.7%). No obvious outlier samples were identified based on sequencing depth alone.
+
 ### Plot percent_assigned for each sample as a bar chart, coloured by condition, with a sensible title and axis labels
 ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
   geom_col() +
@@ -396,7 +398,7 @@ ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
 # A first look across samples
 ####################################
 
-# RNA-seq counts often have a skewed distribution
+# RNA-seq counts have a skewed distribution
 # Many genes have low counts while a smaller number have very high counts
 # Log transformation makes the distributions easier to compare across samples
 
@@ -537,6 +539,8 @@ boxplot(
   ylab = "log2(CPM + 1)",
   main = "After normalisation"
 )
+# The normalisation appears to have worked - the differences caused by unequal sequencing depth no longer seem to dominate the data after normalization.
+
 
 ##################################
 # Principal component analysis ###
@@ -684,13 +688,7 @@ ggsave(
 
 ```
 
-We can see that PC1 has separated our conditions and explains a large share of the variance, suggesting that the experiment has had a strong effect and differential expression will find plenty of genes. 
-
-**Not sure if this wording is accurate here**
-^ I think that sounds great. My understanding is that when PCA shows clear seperation, then we can expect differently expressed genes.
-I feel magnitude and direction can't be commented on until the DEA, but it's clear something is going on.
-
-^Yes, I agree. The commentary should stick to the unit material.
+The PCA of normalised expression data showed clear separation of conditions A and B along PC1, which explained 53.7% of the total variance. All samples clustered according to their experimental condition, suggesting that condition is the primary source of variation in the dataset rather than differences in sequencing depth. Sample_026 exhibited substantial variation along PC2 (19.5% of variance) relative to the other A replicates, indicating additional within-group variability. However, sample_026 remained grouped with condition A on PC1 and did not cluster with the B samples, suggesting that it represents biological or technical variation within condition A rather than a failure of condition separation.
 
 # 3. Differential expression
 
