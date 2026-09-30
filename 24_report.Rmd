@@ -51,7 +51,8 @@ This section constructs the RNA-seq count matrix and sample metadata required fo
 # Combine six HTSeq-count files into one gene six sample matrix
 # Samples: condition A versus condition B, for assessment purposes
 
-# To compare gene expression between conditions, we need all six samples side by side in one table
+# To compare gene expression between conditions
+# we need all six samples side by side in one table
 # The end product of this is a count matrix
 # One row per gene and one column per sample and a read count in every cell
 # We also build a sample metadata table
@@ -88,6 +89,7 @@ sample_metadata$condition <- factor(
   sample_metadata$condition,
   levels = c("A", "B")
 )
+
 # Check that the conversion worked
 levels(sample_metadata$condition)
 # Check the structure of the metadata table
@@ -144,7 +146,7 @@ count_files
 sample_ids <- gsub("_counts\\.txt$", "", count_files)
 sample_ids
 
-# Check that every sample id derived from file name also appears in metadata table
+# Check that every sample id derived from file name also appears in metadata
 # Stop the script if all results do not evaluate as TRUE
 stopifnot(all(sample_ids %in% sample_metadata$sample_id))
 
@@ -152,13 +154,11 @@ stopifnot(all(sample_ids %in% sample_metadata$sample_id))
 # Merging the count files into one table
 ####################################
 
-# Each count file is a two-column table: 
-# ...a gene identifier, and the count for that one sample 
-# To put six samples side by side
-# ...we need to join these tables so that each row still refers to the same gene 
+# Join the six samples side by side
+# to merge gene counts
 
 ### Reading all six files with a loop
-# The if else was added to the loop to create the counts_table object from scratch
+# The if else was added to create the counts_table object from scratch
 # This deviates from the practical code as that included demonstration code
 for (i in 1:length(count_paths)) {
   
@@ -230,7 +230,8 @@ dim(gene_table)
 
 ### Guardrails to be confident we have removed them
 
-# Check that the summary table has five rows, one for each of the five HTSeq-count summary categories
+# Check that the summary table has five rows
+# one for each of the five HTSeq-count summary categories
 stopifnot(nrow(htseq_summary) == 5)
 
 # Check that the gene table has no summary rows
@@ -238,7 +239,9 @@ stopifnot(!any(grepl("^__", gene_table$gene_id)))
 
 # And lastly, check that the gene table has the same number of rows as the original count files
 # ...because we have not lost any genes in the merge
-# The number of rows in the gene table should match the number of rows in any one of the original count files, minus the five summary rows
+# The number of rows in the gene table 
+# should match the number of rows in any one of the original count files
+# minus the five summary rows
 stopifnot(nrow(gene_table) == nrow(one_sample) - 5)
 
 ### These rows tell you how many reads were discarded because they fell outside any gene
@@ -246,6 +249,10 @@ stopifnot(nrow(gene_table) == nrow(one_sample) - 5)
 # or because their alignment quality was too low
 # A sample with an unusually high __no_feature count deserves a closer look
 htseq_summary
+
+# Samples in condition B have higher absolute no_feature counts
+# Particularly sample 007
+# We'll keep an eye on library sizes below
 
 ####################################
 # Building the count matrix
@@ -304,16 +311,20 @@ stopifnot(identical(colnames(count_matrix), rownames(sample_metadata)))
 # The library size of a sample is the total number of reads assigned to genes
 # Samples with more reads will show higher counts for every gene
 # ...which is why we cannot compare raw counts between samples
-# Normalising converts counts into a quantity that does not depend on how deeply the sample was sequenced
+# Normalising converts counts into a quantity that does not depend 
+# ...on how deeply the sample was sequenced
 
-# Remember to use colSums
 # A lib size is a total per sample, and samples are columns in our matrix
 library_sizes <- colSums(count_matrix)
+# # Confirming we have our six samples
 length(library_sizes)
 library_sizes
 
 # Scale library sizes to millions of reads and round to 2 decimal places
 round(library_sizes / 1e6, 2)
+
+# We can see that condition B samples have more reads assigned to genes
+# likely consistent with greater sequencing depth
 
 ### Summary of reads that were not assigned to any gene
 
@@ -349,13 +360,11 @@ plot_sample_order <- sample_metadata$sample_id[
 # Review table so far
 qc_table
 
-# A healthy RNA-seq sample from a well-annotated genome should assign a large majority of its reads to genes
+# A healthy RNA-seq sample from a well-annotated genome 
+# should assign a large majority of its reads to genes
 # A sample that is markedly worse than the others is a candidate for exclusion
-# Should a least be flagged in report
 
-### Plotting the library sizes
-
-# We need to merge condition alongside the library size for coloured bars
+# Let's add condition to investigate more closely and for bar colour
 qc_table <- merge(qc_table, sample_metadata, by = "sample_id")
 
 # Preserve the chosen sample order in ggplot
@@ -364,12 +373,9 @@ qc_table$sample_id <- factor(
   levels = plot_sample_order
 )
 
-# Review again
+# Review again and plot
 qc_table
 
-# Fill aesthetics maps a column to bar colour
-# theme_bw() function replaces the grey default background
-# theme() call rotates the x-axis labels so that the long sample names do not overlap
 ggplot(qc_table, aes(x = sample_id, y = library_size / 1e6, fill = condition)) +
   geom_col() +
   labs(
@@ -380,6 +386,17 @@ ggplot(qc_table, aes(x = sample_id, y = library_size / 1e6, fill = condition)) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+# We can observe that condition B has more reads assigned to genes
+# It could flag a potential issue, it may suggest corruption of data
+# It may indicate a batch effect occurring or other issue
+
+# Ideally we'd bring attention upstream, biologist or project manager who performed the sequencing
+# They may say no batch effects, and it was due to reason x or otherwise
+# If Condition A samples belong to a single batch, and Condition B samples from a different batch 
+# then finding significance between the condition could just mean that batch effects are significant
+
+# If there is a batch effect and it is correlated with condition
+# then the experiment cannot be saved because we cannot adjust the model for batch effects
 # Condition B samples had larger library sizes than condition A samples, indicating higher sequencing depth. Although this difference could introduce technical bias in raw counts, normalization was applied (presented in the PCA & Normalisation section below) to account for variation in library size, and all samples showed comparable read assignment rates (74.5-78.7%). No obvious outlier samples were identified based on sequencing depth alone.
 
 ### Plot percent_assigned for each sample as a bar chart, coloured by condition, with a sensible title and axis labels
@@ -393,16 +410,29 @@ ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+# Condition A samples have slightly lower assignment rates,
+# particularly sample_026, while condition B is more consistent at ~78%
+# This could warrant further QC investigation upstream
+# to rule out any potential batch effect or technical issues
+# or provide legitimate technical or biological explanation 
 
-####################################
-# A first look across samples
-####################################
+# Condition B also has larger assigned libraries
+# Its slightly higher assignment rates suggest that poorer assignment
+# in condition A does not fully explain the difference in library sizes
+
+# Note, percent_assigned is calculated from total_reads in our QC table
+# These are reads accounted for by HTSeq, not necessarily all reads
+# originally generated by the sequencer
+# Confirming sequencing depth would require upstream FASTQ or sequencing QC data
+
+#######################################
+# A first look at counts across samples
+#######################################
 
 # RNA-seq counts have a skewed distribution
 # Many genes have low counts while a smaller number have very high counts
 # Log transformation makes the distributions easier to compare across samples
 
-# Draw histogram of counts across samples
 # Using the plot_sample_order var again to group samples
 # The las = 2 argument turns the sample labels sideways so they fit
 # Logarithm cannot take zero so we add 1 across whole matrix
@@ -413,12 +443,52 @@ boxplot(
   main = "Distribution of gene counts per sample"
 )
 
-# Finally, check what working tables we've created thus far
-ls()
+# The boxplot shows that condition B generally has higher raw gene counts than condition A
+# although the distributions overlap considerably 
+# All samples contain highly expressed genes
+
+### Let's check the numbers
+
+# Compare the distribution of gene counts across our six samples
+# Let's see the numbers behind our boxplot
+count_summary <- data.frame(
+  sample_id = colnames(count_matrix),
+  median_count = apply(count_matrix, 2, median),
+  mean_count = round(colMeans(count_matrix), 1),
+  max_count = apply(count_matrix, 2, max)
+)
+
+# Group samples by condition
+count_summary <- merge(count_summary, sample_metadata, by = "sample_id")
+count_summary <- count_summary[
+  order(count_summary$condition, count_summary$sample_id),
+]
+
+# Show summary table
+count_summary
+
 ```
+
+The means are considerably higher than the medians, reflecting a skewed distribution with a smaller number of highly expressed genes as we saw in the boxplot. These are raw counts, however, so differences between our conditions can reflect library size rather than biological expression.
+
+In a real-world study, we would investigate the differences in library sizes, proportions of genes assigned, and high no-feature reads with the biologist or sequencing team to determine whether they reflect sequencing depth, batch effects or another technical factor. 
+
+If all condition A samples belonged to one batch and all condition B samples to another, batch and condition would be perfectly confounded. 
+
+Any significant differences between conditions could reflect batch effects rather than biology, and we would not be able to adjust the model to separate the two.
+
 
 # 2. Normalisation and PCA
 
+To help correct for these differences in library size/sequencing depth, we divide each count by the sample's library size, before multiplying by one million. 
+
+This is to make our counts more readable; we use CPM for visualisation and to perform our Principle Components Analysis.
+
+Scaling our counts per million can be useful to compare the *same* gene across samples. 
+
+It does not, however, correct for gene length. For this reason, counts per million values cannot be compared between different genes. 
+
+For differential expression testing, DESeq2 uses the filtered raw counts and performs its own normalisation.
 This section prepares the count data for downstream analysis by removing unexpressed and low-count genes, normalising counts to counts-per-million (CPM), and applying a log₂ transformation to stabilise the variance. Principal component analysis (PCA) is then performed on the normalised expression data to identify the major sources of variation between samples, quantify the proportion of variance explained by each component, and assess whether samples cluster according to experimental condition. The resulting PCA plot provides an overview of global expression patterns and serves as an important quality-control check before differential expression analysis.
 
 ```{r pca}
@@ -426,9 +496,9 @@ This section prepares the count data for downstream analysis by removing unexpre
 # Filtering genes with no expression
 ####################################
 
-# Many genes are not expressed at all in this experiment
+# Many genes may not be expressed at all in this experiment
 # They carry no information, they slow the analysis down
-# ...and they cost us statistical power when we correct for multiple testing in Week 9
+# ...and they cost us statistical power when we correct for multiple testing
 
 ### Count how many genes have zero reads across every sample
 
@@ -441,20 +511,20 @@ gene_totals <- rowSums(count_matrix)
 # Keep all columns
 count_matrix_filtered <- count_matrix[gene_totals > 0, ]
 
-# Calculate summary statistics of our genes across samples
+# Check dimensions before filtering
 dim(count_matrix)
 
-# Summary statistics for only genes with reads
+# and after filtering
 dim(count_matrix_filtered)
 
-##############################################
-# Normalisation and exploring the experiment
-##############################################
+# Quick check on how many we removed
+sum(gene_totals == 0)
+
+#############################
+# Normalisation and exploring
+#############################
 
 ### Counts per million
-
-# Each sample has its own library size
-# Work through columns one at a time
 
 # Copy count matrix so dimensions are the same
 cpm <- count_matrix
@@ -471,7 +541,7 @@ for (i in 1:ncol(count_matrix)) {
 dim(cpm)
 # Inspect results
 head(cpm)
-# and confirm that every column of CPM matrix sum is exactly one mill 1e+06
+# and confirm that every column of CPM matrix sum is one mill 1e+06
 colSums(cpm)
 
 ### Filtering low-count genes
@@ -495,12 +565,12 @@ dim(count_matrix)
 dim(counts_filtered)
 
 # Note that we keep the filtered raw counts as well
-# DESeq2 next week wants raw counts, not CPM, because it models the counting process itself
+# DESeq2 below wants raw counts, not CPM, because it models the counting process itself
 # The CPM matrix is for exploration and plotting only
 
 ### Log transformation
 
-# Count data are strongly skewed
+# Count data are strongly skewed as we have just observed
 # A handful of genes carry enormous counts and dominate every plot
 # Taking logarithms compresses that range
 # As always, we add 1 first, because the log of zero is undefined
@@ -511,18 +581,17 @@ log_cpm <- log2(cpm_filtered + 1)
 dim(log_cpm)
 head(log_cpm)
 
-# Earlier in the srcipt we used log10 to squash the y-axis of a boxplot
-# Here we switch to log2, and the change is deliberate
-# Base 2 is conventional in genomics because a difference of 1 on the log2 scale means a doubling of expression
-# ...a difference of 2 means a fourfold change, and so on
-# That interpretation carries directly into the log2 fold changes we calculate later in the analysis
-# For simply squashing a plot's axis either base works; for talking about fold changes, base 2 is the one that lets you read the number
+# Earlier in the script we used log10 to display raw counts
+# Here we use log2, which is conventional in genomics
+# because a difference of 1 on the log2 scale means a doubling of expression
+# For simply squashing a plot's axis either base works
+# for talking about fold changes, base 2 is the one that lets you read the number
 
 ### Did the normalisation work?
 
 # Draw the distributions before and after to manually check that normalisation has worked
-# Checking our samples are now comparable after normalisation
-# Because both matrices are numeric, base R gives one box per sample from a single line of code
+# Check whether accounting for differences in sequencing depth and library composition
+# reduces differences between samples
 
 # Before normalisation
 boxplot(
@@ -541,6 +610,11 @@ boxplot(
 )
 # The normalisation appears to have worked - the differences caused by unequal sequencing depth no longer seem to dominate the data after normalization.
 
+
+# Looks like the differences have reduced appropriately after normalisation
+# Enough for us to compare gene expression
+# Not expected to align perfectly
+# as genuine biological variation should remain
 
 ##################################
 # Principal component analysis ###
@@ -580,7 +654,6 @@ stopifnot(
 )
 
 # The sample coordinates live in pca$x
-# ...so if I ran colnames(pca$x) I get "PC1" "PC2" "PC3" "PC4" "PC5" "PC6"
 
 # Thousands of gene-expression measurements per sample → PCA 
 # → a few summary dimensions (PC1, PC2, etc.) describing the major differences between samples
@@ -589,6 +662,21 @@ stopifnot(
 # PC2 → captures the second most
 # PC3 → captures the third most
 # PC4 → captures the fourth most
+
+# Create a data frame containing each sample's coordinates
+# on PC1 and PC2 (the two components explaining the most variation)
+pca_df <- data.frame(
+  sample_id = rownames(pca$x),
+  PC1 = pca$x[, 1],
+  PC2 = pca$x[, 2]
+)
+
+# Add sample metadata so PCA points can be identified by condition/stage
+pca_df <- merge(pca_df, sample_metadata, by = "sample_id")
+pca_df
+
+# ...note, a biologically important treatment effect can still be relatively small
+# and therefore not obvious in those first two PCs
 
 # Look at how much percent variation each component captures
 # prcomp() stores a standard deviation for each component in pca$sdev
@@ -603,27 +691,7 @@ percent_var <- round(
 # Inspect variation explained by the first four (highest-ranked) PCs
 percent_var[1:4]
 
-# Create a data frame containing each sample's coordinates
-# on PC1 and PC2 (the two components explaining the most variation)
-pca_df <- data.frame(
-  sample_id = rownames(pca$x),
-  PC1 = pca$x[, 1],
-  PC2 = pca$x[, 2]
-)
-
-# Add sample metadata so PCA points can be identified by condition/stage
-# sample_id is the shared key to identify PCA
-pca_df <- merge(pca_df, sample_metadata, by = "sample_id")
-pca_df
-
-# ...note, a biologically important treatment effect can still be relatively small and therefore not obvious in those first two PCs
-
 ### Building the PCA figure with ggplot2
-# The single most informative figure in a routine RNA-seq analysis
-
-# Note, if the value comes from a column of your data, it goes inside aes()
-# If you picked it yourself, it goes outside
-# The same holds for colour, fill, size, shape and alpha
 
 ## Data frame
 # We map to our PCA dataframe pca_df
@@ -634,7 +702,6 @@ pca_df
 ## Geom
 # We set the size of points with geom_point and draw
 # We label points with sample_id using ggrepel rather than manually setting using vjust
-# OPTIONAL ADDITION confirmed by unit chair to be acceptable
 
 ### scale_colour_manual
 # Name them after the factor levels to the colour always follows the group
@@ -744,6 +811,10 @@ paste0("Pearson's Correlation Coefficient estimate : ", round(cor_test,3))
 dds <- estimateDispersions(dds)
 plotDispEsts(dds)
 
+# Save dispersion plot to figures folder
+png("figures/dispersion_plot.png", width = 1800, height = 1500, res = 300)
+plotDispEsts(dds)
+dev.off()
 
 # Although the DEA steps above were performed manually, 
 # the DESeq() function performs size factor estimation, dispersion estimation and model fitting in one call.
@@ -1154,9 +1225,6 @@ paste0("There were ", nrow(as.data.frame(neither_enrich)), " records returned by
 # Visualise top ten terms for upregulated genes
 #dotplot(ego_up, showCategory = 15) +
 #  labs(title = "Enriched biological processes: B vs A in upregulated genes")
-
-
-
 
 # Take a look
 #head(as.data.frame(ego_down)[, c("Description", "GeneRatio", "BgRatio", "p.adjust")], 10)
