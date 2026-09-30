@@ -41,6 +41,8 @@ gene of interest ``r params$gene_of_interest``.
 
 # 1. Count matrix and metadata
 
+This section constructs the RNA-seq count matrix and sample metadata required for downstream analysis. The six assigned HTSeq-count files are read, merged into a single gene-by-sample matrix, and checked to ensure that sample names and metadata are correctly aligned. HTSeq summary rows are separated from gene counts, library sizes and read-assignment statistics are calculated for quality control, and visualisations of sequencing depth, read assignment rates, and count distributions are generated to assess sample quality before normalisation and differential expression analysis.
+
 ```{r matrix}
 ####################################
 # Build the count matrix
@@ -395,6 +397,7 @@ ggplot(qc_table, aes(x = sample_id, y = library_size / 1e6, fill = condition)) +
 
 # If there is a batch effect and it is correlated with condition
 # then the experiment cannot be saved because we cannot adjust the model for batch effects
+# Condition B samples had larger library sizes than condition A samples, indicating higher sequencing depth. Although this difference could introduce technical bias in raw counts, normalization was applied (presented in the PCA & Normalisation section below) to account for variation in library size, and all samples showed comparable read assignment rates (74.5-78.7%). No obvious outlier samples were identified based on sequencing depth alone.
 
 ### Plot percent_assigned for each sample as a bar chart, coloured by condition, with a sensible title and axis labels
 ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
@@ -426,7 +429,7 @@ ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
 # A first look at counts across samples
 #######################################
 
-# RNA-seq counts often have a skewed distribution
+# RNA-seq counts have a skewed distribution
 # Many genes have low counts while a smaller number have very high counts
 # Log transformation makes the distributions easier to compare across samples
 
@@ -486,6 +489,7 @@ Scaling our counts per million can be useful to compare the *same* gene across s
 It does not, however, correct for gene length. For this reason, counts per million values cannot be compared between different genes. 
 
 For differential expression testing, DESeq2 uses the filtered raw counts and performs its own normalisation.
+This section prepares the count data for downstream analysis by removing unexpressed and low-count genes, normalising counts to counts-per-million (CPM), and applying a log₂ transformation to stabilise the variance. Principal component analysis (PCA) is then performed on the normalised expression data to identify the major sources of variation between samples, quantify the proportion of variance explained by each component, and assess whether samples cluster according to experimental condition. The resulting PCA plot provides an overview of global expression patterns and serves as an important quality-control check before differential expression analysis.
 
 ```{r pca}
 ####################################
@@ -604,6 +608,8 @@ boxplot(
   ylab = "log2(CPM + 1)",
   main = "After normalisation"
 )
+# The normalisation appears to have worked - the differences caused by unequal sequencing depth no longer seem to dominate the data after normalization.
+
 
 # Looks like the differences have reduced appropriately after normalisation
 # Enough for us to compare gene expression
@@ -749,9 +755,11 @@ ggsave(
 
 ```
 
-We can see that PC1 has separated our conditions and explains a large share of the variance, suggesting that we can expect differentially expressed genes. 
+The PCA of normalised expression data showed clear separation of conditions A and B along PC1, which explained 53.7% of the total variance. All samples clustered according to their experimental condition along PC1, suggesting that condition is the primary source of variation in the dataset rather than differences in sequencing depth. Sample_026 exhibited substantial variation along PC2 (19.5% of variance) relative to the other A replicates, indicating additional within-group variability. However, sample_026 remained grouped with condition A on PC1 and did not cluster with the B samples, suggesting that it represents biological or technical variation within condition A rather than a failure of condition separation.
 
 # 3. Differential expression
+
+This section performs differential expression analysis using DESeq2 to identify genes whose expression differs between conditions A and B. Raw count data are modelled using a negative binomial framework, accounting for differences in sequencing depth through size-factor normalisation and estimating gene-specific dispersion to quantify biological variability. Differential expression statistics are then calculated for the contrast of condition B versus condition A, and log₂ fold changes are shrunk using the apeglm method to obtain more stable effect-size estimates. Diagnostic plots, including dispersion estimates, p-value distributions, and MA plots, are used to assess model performance and the effect of fold-change shrinkage.
 
 ```{r deseq2}
 # let's check that the count and metadata are correctly aligned
@@ -981,10 +989,7 @@ ggsave(
 
 # 5. Volcano plot and heatmap
 
-A volcano plot shows effect size on the x-axis and statistical significance on the y-axis. Genes that are both strongly changed and confidently detected sit in the top corners, which is where the name comes from.
-
-Significance is plotted as the negative log of the adjusted p-value, so that small p-values become large numbers. A padj of 0.1 becomes 1. A padj of 0.01 becomes 2. A padj of 0.0001 becomes 4. Smaller p-values climb higher up the y-axis, which is exactly the direction a reader expects.
-
+This section identifies significant differentially expressed genes and visualises the results using a volcano plot and heatmap. Genes are classified as up-regulated in condition B, down-regulated in condition B, or not significant using thresholds of adjusted p-value < 0.05 and absolute log₂ fold change > 1. A volcano plot is generated to display both statistical significance and effect size, while a heatmap of significant genes is used to assess expression patterns, sample clustering, and consistency among biological replicates.
 
 ```{r figures}
 res_df$neg_log10_padj <- -log10(res_df$padj)
@@ -1067,11 +1072,13 @@ pheatmap(
   scale = "row",
   show_rownames = FALSE,
   annotation_col = annotation_col,
-  main = "Differentially expressed genes: thin vs early")
+  main = "Differentially expressed genes: B versus A")
 # We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
 ```
 
 # 6. Annotation and GO enrichment
+
+This section annotates differentially expressed genes using the yeast annotation database and performs Gene Ontology (GO) over-representation analysis to identify biological processes associated with the transcriptional response. Significant genes are mapped from systematic ORF identifiers to common gene names and functional descriptions, then compared against the tested gene universe using GO Biological Process enrichment analysis. Enrichment is assessed for all significant genes combined and separately for genes up-regulated and down-regulated in condition B. The results provide biological context for the differential expression analysis by identifying cellular processes that are disproportionately represented among the affected genes.
 
 ```{r enrichment}
 ##################################
@@ -1229,6 +1236,8 @@ dotplot(ego_down, showCategory = 15) +
 
 # 7. Your gene of interest
 
+This section extracts and interprets the assigned gene of interest from the differential expression results. The gene's shrunken log₂ fold change, adjusted p-value, and significance classification are retrieved from the annotated DESeq2 results table. Gene Ontology annotations are then queried to identify biological processes associated with the gene, providing functional context for interpreting its expression changes between conditions A and B.
+
 ```{r goi}
 params$gene_of_interest
 # "YDL022W"
@@ -1259,7 +1268,7 @@ The assigned gene of interest, YDL022W (GPD1), was significantly differentially 
 
 **PCA (max 3 sentences):**
 
-Principal component analysis (PCA) showed that samples clustered primarily according to experimental condition, indicating that condition A and condition B have distinct global gene expression profiles. Replicates from the same condition clustered closely together, suggesting good reproducibility and relatively low within-group variation. The clear separation between conditions supports the use of differential expression analysis to identify genes associated with the treatment effect.
+Principal component analysis (PCA) showed that samples clustered primarily according to experimental condition, indicating that condition A and condition B have distinct global gene expression profiles. Sample_026 showed additional variation along PC2 relative to the other A replicates but is grouped with condition A in PC1, indicating within-group variability rather than loss of condition separation. The clear separation between conditions supports the use of differential expression analysis to identify genes associated with the treatment effect.
 
 **Enrichment (max 4 sentences):**
 
