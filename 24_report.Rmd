@@ -1018,6 +1018,14 @@ p_volcano <- ggplot(
 
 p_volcano
 
+# save to figures folder
+ggsave(
+  filename = "figures/volcano_plot.png",
+  plot = p_volcano,
+  width = 7,
+  height = 6,
+  dpi = 300
+)
 
 # Heatmap
 # Heatmaps answer - do the replicates within a group behave alike, and do the two groups (~condition) look different?
@@ -1041,8 +1049,11 @@ pheatmap(
   scale = "row",
   show_rownames = FALSE,
   annotation_col = annotation_col,
-  main = "Differentially expressed genes: B versus A")
+  main = "Differentially expressed genes: B versus A",
+  filename = "figures/heatmap.png"
+)
 # We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
+
 ```
 
 # 6. Annotation and GO enrichment
