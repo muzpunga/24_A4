@@ -1063,6 +1063,7 @@ pheatmap(
 # We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
 
 # Running again to save to our figures folder
+# Seperate code chunk in case saving means it won't render in knitted HTML
 pheatmap(
   heat_matrix,
   scale = "row",
@@ -1300,9 +1301,9 @@ Interpretation by Murray Chandler Pung and Ivy Craw.
 
 **Volcano caption (2 sentences):**
 
-The most striking feature of the volcano plot is its asymmetry - more genes were down regulated in B (n=147) compared to up regulated in B (n=27). This means that relative to condition A, condition B is associated predominantly with *reduced* expression of many genes, while only a small number of genes show increased expression.
+The most striking feature of the volcano plot comparing condition B with condition A is its asymmetry, with n = `r nrow(down_in_b)` genes down-regulated in B compared with n = `r nrow(up_in_b)` genes up-regulated in B; positive log₂ fold changes indicate higher expression in condition B. This means that relative to condition A, condition B is associated predominantly with *reduced* expression of many genes, while only a smaller number show increased expression; the dashed vertical lines mark the log₂ fold-change thresholds of -1 and 1, and the dashed horizontal line marks the adjusted p-value threshold of 0.05.
 
-Interpretation by Murray Chandler Pung.
+Interpretation by Murray Chandler Pung and Ivy Craw.
 
 # 9. Session information
 
