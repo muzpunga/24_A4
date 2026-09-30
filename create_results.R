@@ -8,7 +8,7 @@ n_down_in_B      <- nrow(down_in_b)
 top_gene_id      <- top_gene
 goi_log2fc       <- goi_lfc
 goi_padj         <- goi_padj
-goi_direction    <- goi_status
+goi_direction    <- strsplit(tolower(goi_status), " ")[[1]][1]
 ego_df           <- as.data.frame(ego) # needed for next line
 top_go_bp_id     <- ego_df$ID[which.min(ego_df$p.adjust)]
 
