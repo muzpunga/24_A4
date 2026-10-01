@@ -1062,6 +1062,7 @@ hm <- pheatmap(
   annotation_col = annotation_col,
   main = "Differentially expressed genes: B versus A"
 )
+hm
 
 # The heatmap shows that samples largely cluster according to condition and that many significant genes display consistent expression patterns within each condition.
 # The heatmap is saved in the figures folder below.
