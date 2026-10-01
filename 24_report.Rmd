@@ -1055,25 +1055,22 @@ dim(heat_matrix)
 annotation_col <- data.frame(Stage = sample_metadata$condition)
 rownames(annotation_col) <- sample_metadata$sample_id
 
-pheatmap(
+hm <- pheatmap(
   heat_matrix,
   scale = "row",
   show_rownames = FALSE,
   annotation_col = annotation_col,
   main = "Differentially expressed genes: B versus A"
 )
-# We see clear differential between the A vs B samples, and reasonable homogeneity between the samples within each Stage (A vs B) category
 
-# Running again to save to our figures folder
-# Seperate code chunk in case saving means it won't render in knitted HTML
-pheatmap(
-  heat_matrix,
-  scale = "row",
-  show_rownames = FALSE,
-  annotation_col = annotation_col,
-  main = "Differentially expressed genes: B versus A",
-  filename = "figures/heatmap.png"
-)
+# The heatmap shows that samples largely cluster according to condition and that many significant genes display consistent expression patterns within each condition.
+# The heatmap is saved in the figures folder below.
+ggsave(
+  filename = "figures/heatmap.png",
+  plot = hm$gtable,
+  width = 8,
+  height = 10,
+  dpi = 300)
 
 ```
 
