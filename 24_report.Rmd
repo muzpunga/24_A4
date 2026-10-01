@@ -27,8 +27,6 @@ set.seed(777)
 library(clusterProfiler)
 library(DESeq2)
 library(ggplot2)
-# What's magrittr used for?
-library(magrittr)
 library(apeglm)
 library(pheatmap)
 library(org.Sc.sgd.db)
