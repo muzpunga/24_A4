@@ -94,8 +94,6 @@ The `figures/` directory is created by the report if it does not already exist. 
 
 ## References and attribution APA 7
 
-Bache, S. M., & Wickham, H. (2026). *magrittr: A forward-pipe operator for R* (Version 2.0.5) [R package]. https://magrittr.tidyverse.org/
-
 Carlson, M. (2026). *org.Sc.sgd.db: Genome wide annotation for yeast* (Version 3.22.0) [R package]. Bioconductor. https://doi.org/10.18129/B9.bioc.org.Sc.sgd.db
 
 Huber, W., Carey, V. J., Gentleman, R., Anders, S., Carlson, M., Carvalho, B. S., Bravo, H. C., Davis, S., Gatto, L., Girke, T., Gottardo, R., Hahne, F., Hansen, K. D., Irizarry, R. A., Lawrence, M., Love, M. I., MacDonald, J., Obenchain, V., Oleś, A. K., ... Morgan, M. (2015). Orchestrating high-throughput genomic analysis with Bioconductor. *Nature Methods, 12*(2), 115–121. https://doi.org/10.1038/nmeth.3252
