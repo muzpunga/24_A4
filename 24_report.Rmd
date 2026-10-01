@@ -84,7 +84,7 @@ sample_metadata
 class(sample_metadata$condition)
 str(sample_metadata)
 
-# We want condition a to be the reference
+# We want condition A to be the reference
 # ...so that later a positive fold change will mean "higher in B than A"
 
 # Convert the condition column to a factor with a as the reference level
@@ -124,8 +124,7 @@ condition_B_files <- c(
 )
 
 # I've updated to use the param here to unpack in clean dir and knit there
-#counts_dir <- params$counts_dir
-counts_dir <- "counts"
+counts_dir <- params$counts_dir
 
 # Create vectors to save the files and their paths
 count_files <- c(condition_A_files, condition_B_files)
@@ -976,8 +975,8 @@ This section identifies significant differentially expressed genes and visualise
 res_df$neg_log10_padj <- -log10(res_df$padj)
 head(res_df[, c("gene_id", "log2FoldChange", "padj", "neg_log10_padj")])
 
-# Add a column recording each gene's status. We use the same thresholds as last week, and we name the groups after the stages we actually compared.
-# "Up in B" is not a stylistic choice. Because B is the reference level, a positive fold change means the gene is higher in B than A, and that is the only claim these labels are entitled to make.
+# Add a column recording each gene's status. We use the same thresholds, and we name the groups after the stages we actually compared.
+# "Up in B" is not a stylistic choice. Because A is the reference level, a positive fold change means the gene is higher in B than A, and that is the only claim these labels are entitled to make.
 res_df$status <- "Not significant"
 res_df$status[res_df$padj < 0.05 & res_df$log2FoldChange > 1] <- "Up in B"
 res_df$status[res_df$padj < 0.05 & res_df$log2FoldChange < -1] <- "Down in B"
