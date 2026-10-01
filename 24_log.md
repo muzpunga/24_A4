@@ -25,4 +25,6 @@
 2026-09-30 — IC — added initials to the setup and session-information chunks and updated checked result values after the final knit with minor adjustments. 
 2026-10-01 — MP — corrected the gene-of-interest direction case in the checked results file and helper script.
 2026-10-01 — IC — drafted the README and final analysis log for submission and merged the documentation updates.
+2026-10-01 — MP - reviewed README and knitted report dress rehearsal.
 2026-10-01 — MP — removed unused libraries, reviewed analysis for replicability and accuracy, fixed broken heatmap rendering to save to object, replaced remaning hardcoded values in interpretation with piped variables.
+2026-10-01 — MP/IC - final review and sanity checks, knit, ZIP, and submission.
