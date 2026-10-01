@@ -19,7 +19,7 @@
 2026-09-29 — MP — added summary paragraphs beneath the analysis headers to explain the purpose of each code chunk.
 2026-09-29 — MP — added first draft of interpretation for all key sections.
 2026-09-29 — IC — reviewed library-size commentary, cleaned comments and reflections in sections 1 and 2, and saved the dispersion plot.
-026-09-30 — MP — refined the library-depth and PCA discussion, supplied the sample_026 interpretation, and created and populated the checked results CSV and helper script.
+2026-09-30 — MP — refined the library-depth and PCA discussion, supplied the sample_026 interpretation, and created and populated the checked results CSV and helper script.
 2026-09-30 — IC/MP — collaboratively reviewed and refined PCA and GO-enrichment interpretation, including the tested-gene universe, annotated-process limitations and biologically cautious wording, replaced some hardcoded values with piped variables.
 2026-09-30 — IC — completed final reproducibility updates, including parameterised count paths, saved volcano and heatmap outputs, code and interpretation attributions, and a dynamic volcano caption using the current results.
 2026-09-30 — IC — added initials to the setup and session-information chunks and updated checked result values after the final knit with minor adjustments. 
