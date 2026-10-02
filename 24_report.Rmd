@@ -436,13 +436,35 @@ ggplot(qc_table, aes(x = sample_id, y = percent_assigned, fill = condition)) +
 # Using the plot_sample_order var again to group samples
 # The las = 2 argument turns the sample labels sideways so they fit
 # Logarithm cannot take zero so we add 1 across whole matrix
-boxplot(
-  log10(count_matrix[, plot_sample_order] + 1),
-  las = 2,
-  ylab = "log10(count + 1)",
-  main = "Distribution of gene counts per sample"
-)
+plot_df <- stack(as.data.frame(log10(count_matrix[, plot_sample_order] + 1)))
+colnames(plot_df) <- c("count", "sample")
 
+# Preserve sample order
+plot_df$sample <- factor(
+  plot_df$sample,
+  levels = plot_sample_order)
+
+# Add condition
+plot_df$condition <- sample_metadata$condition[
+  match(plot_df$sample, sample_metadata$sample_id)]
+
+ggplot(plot_df,
+       aes(x = sample, y = count, fill = condition)) +
+  geom_boxplot() +
+  scale_fill_manual(
+    values = c(
+      "A" = "#F8766D",
+      "B" = "#00BFC4")) +
+  labs(
+    x = "Sample",
+    y = "log10(count + 1)",
+    fill = "Condition",
+    title = "Distribution of gene counts per sample") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1))
 # The boxplot shows that condition B generally has higher raw gene counts than condition A
 # although the distributions overlap considerably 
 # All samples contain highly expressed genes
@@ -586,20 +608,56 @@ head(log_cpm)
 # reduces differences between samples
 
 # Before normalisation
-boxplot(
-  log2(counts_filtered + 1),
-  las = 2,
-  ylab = "log2(count + 1)",
-  main = "Before normalisation"
-)
+plot_df <- stack(as.data.frame(log2(counts_filtered + 1)))
+colnames(plot_df) <- c("count", "sample")
+# Preserve sample order
+plot_df$sample <- factor(plot_df$sample,levels = plot_sample_order)
+# Add condition
+plot_df$condition <- sample_metadata$condition[match(plot_df$sample, sample_metadata$sample_id)]
+
+ggplot(plot_df,
+       aes(x = sample, y = count, fill = condition)) +
+  geom_boxplot() +
+  scale_fill_manual(
+    values = c(
+      "A" = "#F8766D",
+      "B" = "#00BFC4")) +
+  labs(
+    x = "Sample",
+    y = "log2(count + 1)",
+    fill = "Condition",
+    title = "Before normalisation") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1))
 
 # After normalisation
-boxplot(
-  log_cpm,
-  las = 2,
-  ylab = "log2(CPM + 1)",
-  main = "After normalisation"
-)
+plot_df <- stack(as.data.frame(log_cpm))
+colnames(plot_df) <- c("count", "sample")
+# Preserve sample order
+plot_df$sample <- factor(plot_df$sample,levels = plot_sample_order)
+
+# Add condition
+plot_df$condition <- sample_metadata$condition[match(plot_df$sample, sample_metadata$sample_id)]
+
+ggplot(plot_df, aes(x = sample, y = count, fill = condition)) +
+  geom_boxplot() +
+  scale_fill_manual(
+    values = c(
+      "A" = "#F8766D",
+      "B" = "#00BFC4")) +
+  labs(
+    x = "Sample",
+    y = "log2(CPM + 1)",
+    fill = "Condition",
+    title = "After normalisation") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1))
 # The normalisation appears to have worked - the differences caused by unequal sequencing depth no longer seem to dominate the data after normalisation
 
 # Enough for us to compare gene expression
