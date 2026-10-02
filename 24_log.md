@@ -28,3 +28,5 @@
 2026-10-01 — MP - reviewed README and knitted report dress rehearsal.
 2026-10-01 — MP — removed unused libraries, reviewed analysis for replicability and accuracy, fixed broken heatmap rendering to save to object, replaced remaning hardcoded values in interpretation with piped variables.
 2026-10-01 — MP/IC - final review and sanity checks, knit, ZIP, and submission.
+2026-10-02 - MP - replaced boxplot() with ggplot boxplot, tested knitted report on local computer and corrected e- scientific notation to results csv
+2026-10-02 - IC - ran final server rmd knit, zipped and checked results from server results, submitted
