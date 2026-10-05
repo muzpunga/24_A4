@@ -6,6 +6,6 @@
 "n_down_in_B","175",5,"Significant genes with shrunken log2FC < -1 (lower in condition B) (Section 4).","exact"
 "top_gene_id","YML123C",5,"Systematic ID of the gene with the smallest padj; if two genes tie on padj, take the one with the smaller pvalue (Section 3).","exact"
 "goi_log2fc","-1.28211015112114",5,"Shrunken log2 fold change of your gene of interest, to at least four significant figures (Section 7).","tolerance"
-"goi_padj","1.78689590809144",5,"Adjusted p-value of your gene of interest, to at least four significant figures; enter NA if it is NA in your results (Section 7).","tolerance"
+"goi_padj","1.78689590809144e-8",5,"Adjusted p-value of your gene of interest, to at least four significant figures; enter NA if it is NA in your results (Section 7).","tolerance"
 "goi_direction","down",4,"One of up, down or ns in lower case, where up means higher in condition B, using padj < 0.05 and abs(shrunken log2FC) > 1; a gene with NA padj is ns (Section 7).","exact"
 "top_go_bp_id","GO:0043436",5,"GO:ID of the enriched biological process with the smallest adjusted p-value; if two terms tie, take the one with the smaller pvalue (Section 6).","exact"
